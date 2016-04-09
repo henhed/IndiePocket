@@ -16,10 +16,13 @@ pckt_sample_t *
 pckt_sample_malloc ()
 {
   pckt_sample_t *sample = malloc (sizeof (pckt_sample_t));
-  sample->rate = PCKT_SAMPLE_RATE_DEFAULT;
-  sample->frames = NULL;
-  sample->nframes = 0;
-  sample->realsize = 0;
+  if (sample)
+    {
+      sample->rate = PCKT_SAMPLE_RATE_DEFAULT;
+      sample->frames = NULL;
+      sample->nframes = 0;
+      sample->realsize = 0;
+    }
   return sample;
 }
 

@@ -1,6 +1,8 @@
 #ifndef PCKT_SAMPLE_H
 #define PCKT_SAMPLE_H 1
 
+#include <stdlib.h>
+
 #define PCKT_SAMPLE_RATE_DEFAULT 44100
 
 typedef struct pckt_sample_s pckt_sample_t;
