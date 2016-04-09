@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <sndfile.h>
 #include "sample.h"
 
@@ -95,7 +96,37 @@ pckt_resample (pckt_sample_t *sample, unsigned int rate)
   else if (sample->rate == rate || sample->nframes == 0)
     return 1;
 
-  return 0;
+  float ratio = (float) rate / sample->rate;
+  size_t nframes = ratio * sample->nframes;
+  float *frames = malloc (nframes * sizeof (float));
+  if (!frames)
+    return 0;
+
+  unsigned int i, f1, f2;
+  float pos, w1, w2;
+  for (i = 0; i < nframes; ++i)
+    {
+      pos = ((float) i / nframes) * sample->nframes;
+      f1 = floorf (pos); // lower source frame position
+      f2 = ceilf (pos); // upper source frame position
+      if (f1 == f2 || f2 >= sample->nframes)
+        {
+          frames[i] = sample->frames[f1];
+          continue;
+        }
+      w1 = (float) f2 - pos; // lower source frame weight
+      w2 = pos - (float) f1; // upper source frame weight
+      frames[i]
+        = sample->frames[f1] * w1
+        + sample->frames[f2] * w2;
+    }
+
+  free (sample->frames);
+  sample->frames = frames;
+  sample->nframes = nframes;
+  sample->realsize = nframes * sizeof (float);
+
+  return 1;
 }
 
 static int
