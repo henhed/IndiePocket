@@ -48,15 +48,35 @@ pckt_sample_rate (pckt_sample_t *sample, unsigned int rate)
 
 size_t
 pckt_sample_read (const pckt_sample_t *sample, float *frames, size_t nframes,
-                  size_t offset)
+                  size_t offset, unsigned int rate)
 {
-  if (!sample || !frames || !nframes || offset >= sample->nframes)
+  if (!sample || !frames || !nframes)
     return 0;
 
-  if (offset + nframes > sample->nframes)
-    nframes = sample->nframes - offset;
+  if (rate == 0 || rate == sample->rate)
+    {
+      if (offset >= sample->nframes)
+        return 0;
+      else if (offset + nframes > sample->nframes)
+        nframes = sample->nframes - offset;
 
-  memcpy (frames, sample->frames + offset, sizeof (float) * nframes);
+      memcpy (frames, sample->frames + offset, sizeof (float) * nframes);
+    }
+  else // on-the-fly resampling using nearest-neighbor interpolation
+    {
+      float ratio = (float) sample->rate / rate;
+      size_t realoffset = ratio * offset;
+      unsigned int virtframe, realframe;
+      for (virtframe = 0; virtframe < nframes; ++virtframe)
+        {
+          realframe = (virtframe * ratio) + realoffset;
+          if (realframe >= sample->nframes)
+            break;
+          frames[virtframe] = sample->frames[realframe];
+        }
+      nframes = virtframe;
+    }
+
   return nframes;
 }
 
@@ -94,7 +114,7 @@ pckt_sample_write (pckt_sample_t *sample, const float *frames, size_t nframes)
 int
 pckt_resample (pckt_sample_t *sample, unsigned int rate)
 {
-  if (!sample)
+  if (!sample || !rate)
     return 0;
   else if (sample->rate == rate || sample->nframes == 0)
     return 1;
@@ -128,6 +148,7 @@ pckt_resample (pckt_sample_t *sample, unsigned int rate)
   sample->frames = frames;
   sample->nframes = nframes;
   sample->realsize = nframes * sizeof (float);
+  sample->rate = rate;
 
   return 1;
 }
