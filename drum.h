@@ -16,6 +16,7 @@ typedef struct
 {
   pckt_sample_t *samples[PCKT_NCHANNELS];
   float bleed[PCKT_NCHANNELS];
+  size_t progress[PCKT_NCHANNELS];
 } pckt_sound_t;
 
 typedef struct pckt_drum_s pckt_drum_t;
@@ -25,5 +26,6 @@ extern void pckt_drum_free (pckt_drum_t *);
 extern int pckt_drum_setbleed (pckt_drum_t *, pckt_channel_t, float);
 extern int pckt_drum_addsample (pckt_drum_t *, pckt_sample_t *, pckt_channel_t);
 extern int pckt_drum_hit (const pckt_drum_t *, pckt_sound_t *, float);
+extern int pckt_process_sound (pckt_sound_t *, float **, size_t, unsigned int);
 
 #endif /* ! PCKT_DRUM_H */

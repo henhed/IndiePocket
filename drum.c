@@ -92,3 +92,32 @@ pckt_drum_hit (const pckt_drum_t *drum, pckt_sound_t *sound, float force)
 
   return 1;
 }
+
+int
+pckt_process_sound (pckt_sound_t *sound, float **out, size_t nframes,
+                    unsigned int rate)
+{
+  if (!sound || !out || !nframes)
+    return 0;
+
+  pckt_channel_t ch;
+  float buffer[nframes];
+  size_t nread, nreadmax = 0;
+  unsigned int frame;
+  for (ch = PCKT_CH0; ch < PCKT_NCHANNELS; ++ch)
+    {
+      if (!sound->samples[ch] || !out[ch] || sound->bleed[ch] <= 0)
+        continue;
+      nread = pckt_sample_read (sound->samples[ch], buffer, nframes,
+                                sound->progress[ch], rate);
+      sound->progress[ch] += nread;
+      for (frame = 0; frame < nread; ++frame)
+        out[ch][frame] += buffer[frame] * sound->bleed[ch];
+      if (nread < nframes) // mute channel if we're out of frames
+        sound->bleed[ch] = 0;
+      if (nread > nreadmax)
+        nreadmax = nread;
+    }
+
+  return (int) nreadmax;
+}
