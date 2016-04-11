@@ -11,8 +11,10 @@
 #include <lv2/lv2plug.in/ns/ext/atom/util.h>
 
 /* IndiePocket headers.  */
+#include "drum.h"
 
 #define PCKT_URI "http://www.henhed.se/lv2/indiepocket"
+#define MAX_NUM_SOUNDS 16
 
 /* Named port numbers.  */
 enum {
@@ -28,8 +30,9 @@ typedef struct {
   LV2_URID midi_urid;
   LV2_Log_Log *log;
   LV2_Log_Logger logger;
-  void *ports[NUM_PORTS];
   unsigned int samplerate;
+  void *ports[NUM_PORTS];
+  pckt_sound_t sounds[MAX_NUM_SOUNDS];
 } IndiePocket;
 
 static LV2_Handle
@@ -87,12 +90,30 @@ activate (LV2_Handle instance)
   (void) plugin;
 }
 
+/* Generate NFRAMES frames starting at OFFSET in plugin ouput.  */
+static void
+write_output (IndiePocket *plugin, uint32_t nframes, uint32_t offset)
+{
+  if (nframes == 0)
+    return;
+
+  float *out[PCKT_NCHANNELS];
+  memset (out, 0, PCKT_NCHANNELS * sizeof (float *));
+  for (uint32_t port = 0; port < MIDI_IN && port < PCKT_NCHANNELS; ++port)
+    out[port] = ((float *) plugin->ports[port]) + offset;
+
+  for (uint32_t sound = 0; sound < MAX_NUM_SOUNDS; ++sound)
+    pckt_process_sound (&plugin->sounds[sound], out, nframes,
+                        plugin->samplerate);
+}
+
 /* Write NFRAMES frames to audio output ports. This function runs in
    in the `audio' threading class and must be real-time safe.  */
 static void
 run (LV2_Handle instance, uint32_t nframes)
 {
   IndiePocket *plugin = (IndiePocket *) instance;
+  uint32_t offset = 0;
 
   const LV2_Atom_Sequence *events =
     (const LV2_Atom_Sequence *) plugin->ports[MIDI_IN];
@@ -102,9 +123,14 @@ run (LV2_Handle instance, uint32_t nframes)
         continue;
       const uint8_t * const msg = (const uint8_t *) (event + 1);
       if (lv2_midi_message_type (msg) == LV2_MIDI_MSG_NOTE_ON)
-        lv2_log_note (&plugin->logger, "KEY: %u, VEL: %u, FRM: %u, OFF: %ld",
-                      msg[1], msg[2], nframes, event->time.frames);
+        {
+          write_output (plugin, event->time.frames - offset, offset);
+          offset = (uint32_t) event->time.frames;
+          lv2_log_note (&plugin->logger, "KEY: %u, VEL: %u", msg[1], msg[2]);
+        }
     }
+
+  write_output (plugin, nframes - offset, offset);
 }
 
 /* Free any resources allocated in `activate'.  */
