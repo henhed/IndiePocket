@@ -21,7 +21,7 @@ typedef struct
 
 typedef struct pckt_drum_s pckt_drum_t;
 
-extern pckt_drum_t * pckt_drum_malloc ();
+extern pckt_drum_t * pckt_drum_new ();
 extern void pckt_drum_free (pckt_drum_t *);
 extern int pckt_drum_setbleed (pckt_drum_t *, pckt_channel_t, float);
 extern int pckt_drum_addsample (pckt_drum_t *, pckt_sample_t *, pckt_channel_t);

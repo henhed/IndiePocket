@@ -13,7 +13,7 @@ struct pckt_drum_s
 };
 
 pckt_drum_t *
-pckt_drum_malloc ()
+pckt_drum_new ()
 {
   pckt_drum_t *drum = malloc (sizeof (pckt_drum_t));
   if (drum)
