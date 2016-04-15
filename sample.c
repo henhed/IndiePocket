@@ -3,7 +3,7 @@
 #include <math.h>
 #include "sample.h"
 
-struct pckt_sample_s
+struct PcktSampleImpl
 {
   unsigned int rate;
   float *frames;
@@ -11,10 +11,10 @@ struct pckt_sample_s
   size_t realsize;
 };
 
-pckt_sample_t *
+PcktSample *
 pckt_sample_new ()
 {
-  pckt_sample_t *sample = malloc (sizeof (pckt_sample_t));
+  PcktSample *sample = malloc (sizeof (PcktSample));
   if (sample)
     {
       sample->rate = PCKT_SAMPLE_RATE_DEFAULT;
@@ -26,7 +26,7 @@ pckt_sample_new ()
 }
 
 void
-pckt_sample_free (pckt_sample_t *sample)
+pckt_sample_free (PcktSample *sample)
 {
   if (!sample)
     return;
@@ -36,7 +36,7 @@ pckt_sample_free (pckt_sample_t *sample)
 }
 
 unsigned int
-pckt_sample_rate (pckt_sample_t *sample, unsigned int rate)
+pckt_sample_rate (PcktSample *sample, unsigned int rate)
 {
   if (!sample)
     return 0;
@@ -46,7 +46,7 @@ pckt_sample_rate (pckt_sample_t *sample, unsigned int rate)
 }
 
 size_t
-pckt_sample_read (const pckt_sample_t *sample, float *frames, size_t nframes,
+pckt_sample_read (const PcktSample *sample, float *frames, size_t nframes,
                   size_t offset, unsigned int rate)
 {
   if (!sample || !frames || !nframes)
@@ -80,7 +80,7 @@ pckt_sample_read (const pckt_sample_t *sample, float *frames, size_t nframes,
 }
 
 size_t
-pckt_sample_write (pckt_sample_t *sample, const float *frames, size_t nframes)
+pckt_sample_write (PcktSample *sample, const float *frames, size_t nframes)
 {
   if (!sample)
     return 0;
@@ -111,7 +111,7 @@ pckt_sample_write (pckt_sample_t *sample, const float *frames, size_t nframes)
 }
 
 int
-pckt_resample (pckt_sample_t *sample, unsigned int rate)
+pckt_resample (PcktSample *sample, unsigned int rate)
 {
   if (!sample || !rate)
     return 0;

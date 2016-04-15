@@ -2,7 +2,7 @@
 #include "sample.h"
 
 static int
-load_sample (pckt_sample_t *sample, SNDFILE *file, const SF_INFO *info)
+load_sample (PcktSample *sample, SNDFILE *file, const SF_INFO *info)
 {
   if (!sample || !file)
     return 0;
@@ -30,7 +30,7 @@ load_sample (pckt_sample_t *sample, SNDFILE *file, const SF_INFO *info)
   return 1;
 }
 
-pckt_sample_t *
+PcktSample *
 pckt_sample_factory (const char *filename)
 {
   SF_INFO info;
@@ -39,7 +39,7 @@ pckt_sample_factory (const char *filename)
   if (!file)
     return NULL;
 
-  pckt_sample_t *sample = pckt_sample_new ();
+  PcktSample *sample = pckt_sample_new ();
   pckt_sample_rate (sample, (unsigned int) info.samplerate);
   if (!load_sample (sample, file, &info))
     {

@@ -5,29 +5,29 @@
 
 #define MAX_NUM_SAMPLES 16
 
-struct pckt_drum_s
+struct PcktDrumImpl
 {
-  pckt_sample_t *samples[PCKT_NCHANNELS][MAX_NUM_SAMPLES];
+  PcktSample *samples[PCKT_NCHANNELS][MAX_NUM_SAMPLES];
   size_t nsamples[PCKT_NCHANNELS];
   float bleed[PCKT_NCHANNELS];
 };
 
-pckt_drum_t *
+PcktDrum *
 pckt_drum_new ()
 {
-  pckt_drum_t *drum = malloc (sizeof (pckt_drum_t));
+  PcktDrum *drum = malloc (sizeof (PcktDrum));
   if (drum)
-    memset (drum, 0, sizeof (pckt_drum_t));
+    memset (drum, 0, sizeof (PcktDrum));
   return drum;
 }
 
 void
-pckt_drum_free (pckt_drum_t *drum)
+pckt_drum_free (PcktDrum *drum)
 {
   if (!drum)
     return;
-  pckt_sample_t *sample;
-  pckt_channel_t ch;
+  PcktSample *sample;
+  PcktChannel ch;
   unsigned int i;
   for (ch = PCKT_CH0; ch < PCKT_NCHANNELS; ++ch)
     {
@@ -42,7 +42,7 @@ pckt_drum_free (pckt_drum_t *drum)
 }
 
 int
-pckt_drum_setbleed (pckt_drum_t *drum, pckt_channel_t ch, float bleed)
+pckt_drum_set_bleed (PcktDrum *drum, PcktChannel ch, float bleed)
 {
   if (!drum || ch < PCKT_CH0 || ch >= PCKT_NCHANNELS || bleed < 0)
     return 0;
@@ -51,8 +51,7 @@ pckt_drum_setbleed (pckt_drum_t *drum, pckt_channel_t ch, float bleed)
 }
 
 int
-pckt_drum_addsample (pckt_drum_t *drum, pckt_sample_t *sample,
-                     pckt_channel_t ch)
+pckt_drum_add_sample (PcktDrum *drum, PcktSample *sample, PcktChannel ch)
 {
   if (!drum || !sample || ch < PCKT_CH0 || ch >= PCKT_NCHANNELS
       || drum->nsamples[ch] >= MAX_NUM_SAMPLES)
@@ -62,16 +61,16 @@ pckt_drum_addsample (pckt_drum_t *drum, pckt_sample_t *sample,
 }
 
 int
-pckt_drum_hit (const pckt_drum_t *drum, pckt_sound_t *sound, float force)
+pckt_drum_hit (const PcktDrum *drum, PcktSound *sound, float force)
 {
   if (!drum || !sound)
     return 0;
 
-  memset (sound, 0, sizeof (pckt_sound_t));
+  memset (sound, 0, sizeof (PcktSound));
   if (force <= 0)
     return 1;
 
-  pckt_channel_t ch;
+  PcktChannel ch;
   unsigned int sample;
   size_t nsamples;
   float bleed;
@@ -94,13 +93,13 @@ pckt_drum_hit (const pckt_drum_t *drum, pckt_sound_t *sound, float force)
 }
 
 int
-pckt_process_sound (pckt_sound_t *sound, float **out, size_t nframes,
+pckt_process_sound (PcktSound *sound, float **out, size_t nframes,
                     unsigned int rate)
 {
   if (!sound || !out || !nframes)
     return 0;
 
-  pckt_channel_t ch;
+  PcktChannel ch;
   float buffer[nframes];
   size_t nread, nreadmax = 0;
   unsigned int frame;

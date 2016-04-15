@@ -32,7 +32,7 @@ typedef struct {
   LV2_Log_Logger logger;
   unsigned int samplerate;
   void *ports[NUM_PORTS];
-  pckt_sound_t sounds[MAX_NUM_SOUNDS];
+  PcktSound sounds[MAX_NUM_SOUNDS];
 } IndiePocket;
 
 static LV2_Handle

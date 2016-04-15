@@ -5,15 +5,15 @@
 
 #define PCKT_SAMPLE_RATE_DEFAULT 44100
 
-typedef struct pckt_sample_s pckt_sample_t;
+typedef struct PcktSampleImpl PcktSample;
 
-extern pckt_sample_t * pckt_sample_new ();
-extern void pckt_sample_free (pckt_sample_t *);
-extern unsigned int pckt_sample_rate (pckt_sample_t *, unsigned int);
-extern size_t pckt_sample_read (const pckt_sample_t *, float *, size_t, size_t,
+extern PcktSample *pckt_sample_new ();
+extern void pckt_sample_free (PcktSample *);
+extern unsigned int pckt_sample_rate (PcktSample *, unsigned int);
+extern size_t pckt_sample_read (const PcktSample *, float *, size_t, size_t,
                                 unsigned int);
-extern size_t pckt_sample_write (pckt_sample_t *, const float *, size_t);
-extern int pckt_resample (pckt_sample_t *, unsigned int);
-extern pckt_sample_t * pckt_sample_factory (const char *);
+extern size_t pckt_sample_write (PcktSample *, const float *, size_t);
+extern int pckt_resample (PcktSample *, unsigned int);
+extern PcktSample *pckt_sample_factory (const char *);
 
 #endif /* ! PCKT_SAMPLE_H */
