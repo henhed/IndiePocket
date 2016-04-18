@@ -1,16 +1,16 @@
 #include <sndfile.h>
 #include "sample.h"
 
-static int
+static bool
 load_sample (PcktSample *sample, SNDFILE *file, const SF_INFO *info)
 {
   if (!sample || !file)
-    return 0;
+    return false;
 
-  if (!pckt_resample (sample, (unsigned int) info->samplerate))
-    return 0;
+  if (!pckt_resample (sample, (uint32_t) info->samplerate))
+    return false;
 
-  int f, c;
+  int32_t f, c;
   size_t nframes = 4096;
   float mono[nframes];
   float interleaved[nframes * info->channels];
@@ -27,7 +27,7 @@ load_sample (PcktSample *sample, SNDFILE *file, const SF_INFO *info)
       pckt_sample_write (sample, mono, nread);
     }
 
-  return 1;
+  return true;
 }
 
 PcktSample *
@@ -40,7 +40,7 @@ pckt_sample_factory (const char *filename)
     return NULL;
 
   PcktSample *sample = pckt_sample_new ();
-  pckt_sample_rate (sample, (unsigned int) info.samplerate);
+  pckt_sample_rate (sample, (uint32_t) info.samplerate);
   if (!load_sample (sample, file, &info))
     {
       pckt_sample_free (sample);

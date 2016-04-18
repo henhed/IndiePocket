@@ -66,7 +66,7 @@ node_is_float (const SordNode *node)
   return node_is_type (node, URI_XSD "decimal");
 }
 
-static inline int
+static inline int32_t
 node_to_int (const SordNode *node)
 {
   return atoi ((const char*) sord_node_get_string (node));
@@ -223,7 +223,7 @@ get_drum_id (const SordNode *drum_node, SordModel *sord,
     {
       if (node_is_int (key))
         {
-          int i = node_to_int (key);
+          int32_t i = node_to_int (key);
           if (i > 0 && i <= INT8_MAX)
             id = i;
         }
@@ -286,7 +286,7 @@ init_mics (SordModel *sord, KitFactory *factory)
         {
           if (node_is_int (ch_node))
             {
-              int i = node_to_int (ch_node);
+              int32_t i = node_to_int (ch_node);
               if (i >= PCKT_CH0 && i < PCKT_NCHANNELS)
                 factory->mics[i] = mic_node;
             }

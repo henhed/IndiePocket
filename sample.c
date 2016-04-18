@@ -5,7 +5,7 @@
 
 struct PcktSampleImpl
 {
-  unsigned int rate;
+  uint32_t rate;
   float *frames;
   size_t nframes;
   size_t realsize;
@@ -35,8 +35,8 @@ pckt_sample_free (PcktSample *sample)
   free (sample);
 }
 
-unsigned int
-pckt_sample_rate (PcktSample *sample, unsigned int rate)
+uint32_t
+pckt_sample_rate (PcktSample *sample, uint32_t rate)
 {
   if (!sample)
     return 0;
@@ -47,7 +47,7 @@ pckt_sample_rate (PcktSample *sample, unsigned int rate)
 
 size_t
 pckt_sample_read (const PcktSample *sample, float *frames, size_t nframes,
-                  size_t offset, unsigned int rate)
+                  size_t offset, uint32_t rate)
 {
   if (!sample || !frames || !nframes)
     return 0;
@@ -65,7 +65,7 @@ pckt_sample_read (const PcktSample *sample, float *frames, size_t nframes,
     {
       float ratio = (float) sample->rate / rate;
       size_t realoffset = ratio * offset;
-      unsigned int virtframe, realframe;
+      uint32_t virtframe, realframe;
       for (virtframe = 0; virtframe < nframes; ++virtframe)
         {
           realframe = (virtframe * ratio) + realoffset;
@@ -110,21 +110,21 @@ pckt_sample_write (PcktSample *sample, const float *frames, size_t nframes)
   return sample->nframes;
 }
 
-int
-pckt_resample (PcktSample *sample, unsigned int rate)
+bool
+pckt_resample (PcktSample *sample, uint32_t rate)
 {
   if (!sample || !rate)
-    return 0;
+    return false;
   else if (sample->rate == rate || sample->nframes == 0)
-    return 1;
+    return true;
 
   float ratio = (float) rate / sample->rate;
   size_t nframes = ratio * sample->nframes;
   float *frames = malloc (nframes * sizeof (float));
   if (!frames)
-    return 0;
+    return false;
 
-  unsigned int i, f1, f2;
+  uint32_t i, f1, f2;
   float pos, w1, w2;
   for (i = 0; i < nframes; ++i)
     {
@@ -149,5 +149,5 @@ pckt_resample (PcktSample *sample, unsigned int rate)
   sample->realsize = nframes * sizeof (float);
   sample->rate = rate;
 
-  return 1;
+  return true;
 }
