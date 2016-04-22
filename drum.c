@@ -67,6 +67,7 @@ pckt_drum_hit (const PcktDrum *drum, PcktSound *sound, float force)
     return false;
 
   memset (sound, 0, sizeof (PcktSound));
+  sound->source = drum;
   if (force <= 0)
     return true;
 
@@ -90,33 +91,4 @@ pckt_drum_hit (const PcktDrum *drum, PcktSound *sound, float force)
     }
 
   return true;
-}
-
-int32_t
-pckt_process_sound (PcktSound *sound, float **out, size_t nframes,
-                    uint32_t rate)
-{
-  if (!sound || !out || !nframes)
-    return 0;
-
-  PcktChannel ch;
-  float buffer[nframes];
-  size_t nread, nreadmax = 0;
-  uint32_t frame;
-  for (ch = PCKT_CH0; ch < PCKT_NCHANNELS; ++ch)
-    {
-      if (!sound->samples[ch] || !out[ch] || sound->bleed[ch] <= 0)
-        continue;
-      nread = pckt_sample_read (sound->samples[ch], buffer, nframes,
-                                sound->progress[ch], rate);
-      sound->progress[ch] += nread;
-      for (frame = 0; frame < nread; ++frame)
-        out[ch][frame] += buffer[frame] * sound->bleed[ch];
-      if (nread < nframes) // mute channel if we're out of frames
-        sound->bleed[ch] = 0;
-      if (nread > nreadmax)
-        nreadmax = nread;
-    }
-
-  return (int32_t) nreadmax;
 }
