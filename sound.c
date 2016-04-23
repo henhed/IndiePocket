@@ -17,7 +17,10 @@ pckt_soundpool_new (size_t poolsize)
         {
           pool->sounds = malloc (poolsize * sizeof (PcktSound));
           if (pool->sounds)
-            memset (pool->sounds, 0, poolsize * sizeof (PcktSound));
+            {
+              for (uint32_t i = 0; i < poolsize; ++i)
+                pckt_sound_clear (pool->sounds + i);
+            }
           else
             {
               free (pool);
@@ -89,6 +92,39 @@ pckt_soundpool_get (PcktSoundPool *pool, const void *source)
   return sound;
 }
 
+bool
+pckt_soundpool_choke (PcktSoundPool *pool, const void *source)
+{
+  if (!pool || !source || pool->nsounds == 0)
+    return false;
+  for (uint32_t i = 0; i < pool->nsounds; ++i)
+    {
+      if (pool->sounds[i].source == source)
+        pool->sounds[i].choke = true;
+    }
+  return true;
+}
+
+bool
+pckt_sound_clear (PcktSound *sound)
+{
+  if (!sound)
+    return false;
+
+  for (PcktChannel ch = PCKT_CH0; ch < PCKT_NCHANNELS; ++ch)
+    {
+      sound->samples[ch] = NULL;
+      sound->bleed[ch] = 0;
+      sound->progress[ch] = 0;
+    }
+  sound->impact = 0;
+  sound->variance = 0;
+  sound->choke = false;
+  sound->source = NULL;
+
+  return true;
+}
+
 int32_t
 pckt_sound_process (PcktSound *sound, float **out, size_t nframes,
                     uint32_t rate)
@@ -96,23 +132,43 @@ pckt_sound_process (PcktSound *sound, float **out, size_t nframes,
   if (!sound || !out || !nframes)
     return 0;
 
-  PcktChannel ch;
   float frame, buffer[nframes];
   float k, sum[PCKT_NCHANNELS], sum2[PCKT_NCHANNELS]; /* For variance.  */
   size_t nread, nreadmax = 0;
+  /* Calculate decay rate if sound is choked and a frame rate was given.  */
+  bool choke = sound->choke && (sound->impact > 0);
+  float decay = ((choke && rate > 0)
+                 ? (sound->impact / (PCKT_CHOKE_TIME * rate))
+                 : 0);
+  PcktChannel ch;
   uint32_t i;
   for (ch = PCKT_CH0; ch < PCKT_NCHANNELS; ++ch)
     {
       sum[ch] = 0;
       sum2[ch] = 0;
+
       if (!sound->samples[ch] || !out[ch] || sound->bleed[ch] <= 0)
         continue;
+
+      /* Read NFRAMES frames from sample into BUFFER.  */
       nread = pckt_sample_read (sound->samples[ch], buffer, nframes,
                                 sound->progress[ch], rate);
       sound->progress[ch] += nread;
+
+      if (choke && rate == 0)
+        /* Claculate per-sample decay rate if sound is choked and no frame rate
+           was given.  */
+        decay = sound->impact / (PCKT_CHOKE_TIME
+                                 * pckt_sample_rate (sound->samples[ch], 0));
+
+      /* Write buffered frames to output.  */
       k = buffer[0] * sound->bleed[ch];
       for (i = 0; i < nread; ++i)
         {
+          if (decay >= sound->bleed[ch])
+            sound->bleed[ch] = 0;
+          else if (decay > 0)
+            sound->bleed[ch] -= decay;
           frame = buffer[i] * sound->bleed[ch];
           out[ch][i] += frame;
           sum[ch] += frame - k;

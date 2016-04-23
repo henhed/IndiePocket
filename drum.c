@@ -63,10 +63,9 @@ pckt_drum_add_sample (PcktDrum *drum, PcktSample *sample, PcktChannel ch)
 bool
 pckt_drum_hit (const PcktDrum *drum, PcktSound *sound, float force)
 {
-  if (!drum || !sound)
+  if (!drum || !sound || !pckt_sound_clear (sound))
     return false;
 
-  memset (sound, 0, sizeof (PcktSound));
   sound->source = drum;
   if (force <= 0)
     return true;
@@ -89,6 +88,8 @@ pckt_drum_hit (const PcktDrum *drum, PcktSound *sound, float force)
         sample = nsamples - 1;
       sound->samples[ch] = drum->samples[ch][sample];
     }
+
+  sound->impact = force;
 
   return true;
 }

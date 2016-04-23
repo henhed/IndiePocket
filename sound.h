@@ -4,6 +4,8 @@
 #include "pckt.h"
 #include "sample.h"
 
+#define PCKT_CHOKE_TIME .5f
+
 __BEGIN_DECLS
 
 typedef enum
@@ -20,7 +22,9 @@ typedef struct
   PcktSample *samples[PCKT_NCHANNELS];
   float bleed[PCKT_NCHANNELS];
   size_t progress[PCKT_NCHANNELS];
+  float impact;
   float variance;
+  bool choke;
   const void *source;
 } PcktSound;
 
@@ -30,6 +34,8 @@ extern PcktSoundPool *pckt_soundpool_new (size_t);
 extern void pckt_soundpool_free (PcktSoundPool *);
 extern PcktSound *pckt_soundpool_at (PcktSoundPool *, uint32_t);
 extern PcktSound *pckt_soundpool_get (PcktSoundPool *, const void *);
+extern bool pckt_soundpool_choke (PcktSoundPool *, const void *);
+extern bool pckt_sound_clear (PcktSound *);
 extern int32_t pckt_sound_process (PcktSound *, float **, size_t, uint32_t);
 
 __END_DECLS
