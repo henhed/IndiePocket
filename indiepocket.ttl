@@ -32,7 +32,6 @@ pckt:OutputGroup
         lv2:index 0 ;
         lv2:symbol "AUDIO_OUT_KICK_1" ;
         lv2:name "Audio Out Kick 1" ;
-        lv2:designation pg:center ;
         pg:group pckt:OutputGroup ;
     ] , [
         a lv2:AudioPort ,
@@ -40,7 +39,6 @@ pckt:OutputGroup
         lv2:index 1 ;
         lv2:symbol "AUDIO_OUT_KICK_2" ;
         lv2:name "Audio Out Kick 2" ;
-        lv2:designation pg:center ;
         pg:group pckt:OutputGroup ;
     ] , [
         a lv2:AudioPort ,
@@ -48,7 +46,6 @@ pckt:OutputGroup
         lv2:index 2 ;
         lv2:symbol "AUDIO_OUT_SNARE_1" ;
         lv2:name "Audio Out Snare 1" ;
-        lv2:designation pg:center ;
         pg:group pckt:OutputGroup ;
     ] , [
         a lv2:AudioPort ,
@@ -56,7 +53,90 @@ pckt:OutputGroup
         lv2:index 3 ;
         lv2:symbol "AUDIO_OUT_SNARE_2" ;
         lv2:name "Audio Out Snare 2" ;
-        lv2:designation pg:center ;
+        pg:group pckt:OutputGroup ;
+    ] , [
+        a lv2:AudioPort ,
+            lv2:OutputPort ;
+        lv2:index 4 ;
+        lv2:symbol "AUDIO_OUT_HIHAT_1" ;
+        lv2:name "Audio Out Hi-hat 1" ;
+        pg:group pckt:OutputGroup ;
+    ] , [
+        a lv2:AudioPort ,
+            lv2:OutputPort ;
+        lv2:index 5 ;
+        lv2:symbol "AUDIO_OUT_HIHAT_2" ;
+        lv2:name "Audio Out Hi-hat 2" ;
+        pg:group pckt:OutputGroup ;
+    ] , [
+        a lv2:AudioPort ,
+            lv2:OutputPort ;
+        lv2:index 6 ;
+        lv2:symbol "AUDIO_OUT_TOM_1" ;
+        lv2:name "Audio Out Tom 1" ;
+        pg:group pckt:OutputGroup ;
+    ] , [
+        a lv2:AudioPort ,
+            lv2:OutputPort ;
+        lv2:index 7 ;
+        lv2:symbol "AUDIO_OUT_TOM_2" ;
+        lv2:name "Audio Out Tom 2" ;
+        pg:group pckt:OutputGroup ;
+    ] , [
+        a lv2:AudioPort ,
+            lv2:OutputPort ;
+        lv2:index 8 ;
+        lv2:symbol "AUDIO_OUT_TOM_3" ;
+        lv2:name "Audio Out Tom 3" ;
+        pg:group pckt:OutputGroup ;
+    ] , [
+        a lv2:AudioPort ,
+            lv2:OutputPort ;
+        lv2:index 9 ;
+        lv2:symbol "AUDIO_OUT_TOM_4" ;
+        lv2:name "Audio Out Tom 4" ;
+        pg:group pckt:OutputGroup ;
+    ] , [
+        a lv2:AudioPort ,
+            lv2:OutputPort ;
+        lv2:index 10 ;
+        lv2:symbol "AUDIO_OUT_CYM_1" ;
+        lv2:name "Audio Out Cymbal 1" ;
+        pg:group pckt:OutputGroup ;
+    ] , [
+        a lv2:AudioPort ,
+            lv2:OutputPort ;
+        lv2:index 11 ;
+        lv2:symbol "AUDIO_OUT_CYM_2" ;
+        lv2:name "Audio Out Cymbal 2" ;
+        pg:group pckt:OutputGroup ;
+    ] , [
+        a lv2:AudioPort ,
+            lv2:OutputPort ;
+        lv2:index 12 ;
+        lv2:symbol "AUDIO_OUT_CYM_3" ;
+        lv2:name "Audio Out Cymbal 3" ;
+        pg:group pckt:OutputGroup ;
+    ] , [
+        a lv2:AudioPort ,
+            lv2:OutputPort ;
+        lv2:index 13 ;
+        lv2:symbol "AUDIO_OUT_CYM_4" ;
+        lv2:name "Audio Out Cymbal 4" ;
+        pg:group pckt:OutputGroup ;
+    ] , [
+        a lv2:AudioPort ,
+            lv2:OutputPort ;
+        lv2:index 14 ;
+        lv2:symbol "AUDIO_OUT_ROOM_1" ;
+        lv2:name "Audio Out Room 1" ;
+        pg:group pckt:OutputGroup ;
+    ] , [
+        a lv2:AudioPort ,
+            lv2:OutputPort ;
+        lv2:index 15 ;
+        lv2:symbol "AUDIO_OUT_ROOM_2" ;
+        lv2:name "Audio Out Room 2" ;
         pg:group pckt:OutputGroup ;
     ] , [
         a lv2:InputPort ,
@@ -64,7 +144,7 @@ pckt:OutputGroup
         atom:bufferType atom:Sequence ;
         atom:supports midi:MidiEvent ;
         lv2:designation lv2:control ;
-        lv2:index 4 ;
+        lv2:index 16 ;
         lv2:symbol "MIDI_IN" ;
         lv2:name "MIDI In" ;
     ] .

@@ -11,10 +11,12 @@
 #include <lv2/lv2plug.in/ns/ext/atom/util.h>
 
 /* IndiePocket headers.  */
+#include "kit.h"
+#include "sound.h"
 #include "drum.h"
 
 #define PCKT_URI "http://www.henhed.se/lv2/indiepocket"
-#define MAX_NUM_SOUNDS 16
+#define MAX_NUM_SOUNDS 32
 
 /* Named port numbers.  */
 enum {
@@ -22,6 +24,18 @@ enum {
   AUDIO_OUT_KICK_2,
   AUDIO_OUT_SNARE_1,
   AUDIO_OUT_SNARE_2,
+  AUDIO_OUT_HIHAT_1,
+  AUDIO_OUT_HIHAT_2,
+  AUDIO_OUT_TOM_1,
+  AUDIO_OUT_TOM_2,
+  AUDIO_OUT_TOM_3,
+  AUDIO_OUT_TOM_4,
+  AUDIO_OUT_CYM_1,
+  AUDIO_OUT_CYM_2,
+  AUDIO_OUT_CYM_3,
+  AUDIO_OUT_CYM_4,
+  AUDIO_OUT_ROOM_1,
+  AUDIO_OUT_ROOM_2,
   MIDI_IN,
   NUM_PORTS
 };
@@ -30,9 +44,10 @@ typedef struct {
   LV2_URID midi_urid;
   LV2_Log_Log *log;
   LV2_Log_Logger logger;
-  unsigned int samplerate;
+  uint32_t samplerate;
   void *ports[NUM_PORTS];
-  PcktSound sounds[MAX_NUM_SOUNDS];
+  PcktKit *kit;
+  PcktSoundPool *pool;
 } IndiePocket;
 
 static LV2_Handle
@@ -66,7 +81,9 @@ instantiate (const LV2_Descriptor *descriptor, double rate,
     }
 
   plugin->midi_urid = map->map (map->handle, LV2_MIDI__MidiEvent);
-  plugin->samplerate = (unsigned int) rate;
+  plugin->samplerate = (uint32_t) rate;
+  plugin->kit = NULL;
+  plugin->pool = pckt_soundpool_new (MAX_NUM_SOUNDS);
 
   return (LV2_Handle) plugin;
 }
@@ -102,9 +119,10 @@ write_output (IndiePocket *plugin, uint32_t nframes, uint32_t offset)
   for (uint32_t port = 0; port < MIDI_IN && port < PCKT_NCHANNELS; ++port)
     out[port] = ((float *) plugin->ports[port]) + offset;
 
-  for (uint32_t sound = 0; sound < MAX_NUM_SOUNDS; ++sound)
-    pckt_process_sound (&plugin->sounds[sound], out, nframes,
-                        plugin->samplerate);
+  PcktSound *sound;
+  uint32_t i = 0;
+  while ((sound = pckt_soundpool_at (plugin->pool, i++)))
+    pckt_sound_process (sound, out, nframes, plugin->samplerate);
 }
 
 /* Write NFRAMES frames to audio output ports. This function runs in
@@ -113,8 +131,10 @@ static void
 run (LV2_Handle instance, uint32_t nframes)
 {
   IndiePocket *plugin = (IndiePocket *) instance;
-  uint32_t offset = 0;
+  if (!plugin->kit)
+    return;
 
+  uint32_t offset = 0;
   const LV2_Atom_Sequence *events =
     (const LV2_Atom_Sequence *) plugin->ports[MIDI_IN];
   LV2_ATOM_SEQUENCE_FOREACH (events, event)
@@ -126,7 +146,20 @@ run (LV2_Handle instance, uint32_t nframes)
         {
           write_output (plugin, event->time.frames - offset, offset);
           offset = (uint32_t) event->time.frames;
+
           lv2_log_note (&plugin->logger, "KEY: %u, VEL: %u", msg[1], msg[2]);
+
+          /* Make a sound if there is a drum for the pressed MIDI note.  */
+          PcktDrum *drum = pckt_kit_get_drum (plugin->kit, (int8_t) msg[1]);
+          if (drum)
+            {
+              PcktSound *sound = pckt_soundpool_get (plugin->pool, drum);
+              if (sound)
+                pckt_drum_hit (drum, sound, ((float) msg[2]) / 127);
+            }
+
+          /* Choke any sounds affected by the note.  */
+          pckt_kit_choke_by_id (plugin->kit, plugin->pool, (int8_t) msg[1]);
         }
     }
 
@@ -145,7 +178,10 @@ deactivate (LV2_Handle instance)
 static void
 cleanup (LV2_Handle instance)
 {
-  free (instance);
+  IndiePocket *plugin = (IndiePocket *) instance;
+  pckt_kit_free (plugin->kit);
+  pckt_soundpool_free (plugin->pool);
+  free (plugin);
 }
 
 /* Return any extension data supported by this plugin.  */
