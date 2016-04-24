@@ -30,6 +30,7 @@ typedef struct {
     SordNode *class_sound;
     SordNode *prop_bleed;
     SordNode *prop_channel;
+    SordNode *prop_choke;
     SordNode *prop_file;
     SordNode *prop_kit;
     SordNode *prop_key;
@@ -232,6 +233,24 @@ get_drum_id (const SordNode *drum_node, SordModel *sord,
   return id;
 }
 
+static inline void
+load_kit_chokes (PcktKit *kit, int8_t id, const SordNode *drum_node,
+                 SordModel *sord, const KitFactory *factory)
+{
+  SordIter *it = sord_search (sord, drum_node, factory->uris.prop_choke,
+                              NULL, NULL);
+  if (it)
+    {
+      for (; !sord_iter_end (it); sord_iter_next (it))
+        {
+          const SordNode *choke_node = sord_iter_get_node (it, SORD_OBJECT);
+          if (node_is_int (choke_node))
+            pckt_kit_set_choke (kit, node_to_int (choke_node), id, true);
+        }
+      sord_iter_free (it);
+    }
+}
+
 static PcktKit *
 load_kit (const SordNode *kit_node, SordModel *sord, const KitFactory *factory)
 {
@@ -257,7 +276,10 @@ load_kit (const SordNode *kit_node, SordModel *sord, const KitFactory *factory)
             continue; // invalid or occupied ID
           PcktDrum *drum = load_drum (drum_node, sord, factory);
           if (drum)
-            pckt_kit_add_drum (kit, drum, id);
+            {
+              pckt_kit_add_drum (kit, drum, id);
+              load_kit_chokes (kit, id, drum_node, sord, factory);
+            }
         }
     }
   sord_iter_free (it);
@@ -351,6 +373,7 @@ pckt_kit_factory (const char *filename)
       sord_new_uri (world, (const uint8_t *) URI_PCKT "Sound"),
       sord_new_uri (world, (const uint8_t *) URI_PCKT "bleed"),
       sord_new_uri (world, (const uint8_t *) URI_PCKT "channel"),
+      sord_new_uri (world, (const uint8_t *) URI_PCKT "choke"),
       sord_new_uri (world, (const uint8_t *) URI_PCKT "file"),
       sord_new_uri (world, (const uint8_t *) URI_PCKT "kit"),
       sord_new_uri (world, (const uint8_t *) URI_PCKT "key"),
