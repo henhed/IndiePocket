@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "pckt.h"
 #include "drum.h"
+#include "sound.h"
 
 __BEGIN_DECLS
 
@@ -13,6 +14,8 @@ extern PcktKit *pckt_kit_new ();
 extern void pckt_kit_free (PcktKit *);
 extern int8_t pckt_kit_add_drum (PcktKit *, PcktDrum *, int8_t);
 extern PcktDrum *pckt_kit_get_drum (const PcktKit *, int8_t);
+extern bool pckt_kit_set_choke (PcktKit *, int8_t, int8_t, bool);
+extern bool pckt_kit_choke_by_id (const PcktKit *, PcktSoundPool *, int8_t);
 extern PcktKit *pckt_kit_factory (const char *);
 
 __END_DECLS
