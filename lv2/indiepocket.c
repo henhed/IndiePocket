@@ -11,9 +11,9 @@
 #include <lv2/lv2plug.in/ns/ext/atom/util.h>
 
 /* IndiePocket headers.  */
-#include "kit.h"
-#include "sound.h"
-#include "drum.h"
+#include "../pckt/kit.h"
+#include "../pckt/sound.h"
+#include "../pckt/drum.h"
 
 #define PCKT_URI "http://www.henhed.se/lv2/indiepocket"
 #define MAX_NUM_SOUNDS 32
