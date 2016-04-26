@@ -1,7 +1,13 @@
 @prefix lv2:  <http://lv2plug.in/ns/lv2core#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ui:   <http://lv2plug.in/ns/extensions/ui#> .
 
 <http://www.henhed.se/lv2/indiepocket>
     a lv2:Plugin ;
     lv2:binary <indiepocket.so> ;
+    rdfs:seeAlso <indiepocket.ttl> .
+
+<http://www.henhed.se/lv2/indiepocket#ui>
+    a ui:GtkUI ;
+    ui:binary <indiepocket_ui.so> ;
     rdfs:seeAlso <indiepocket.ttl> .
