@@ -144,8 +144,11 @@ run (LV2_Handle instance, uint32_t nframes)
       const uint8_t * const msg = (const uint8_t *) (event + 1);
       if (lv2_midi_message_type (msg) == LV2_MIDI_MSG_NOTE_ON)
         {
-          write_output (plugin, event->time.frames - offset, offset);
-          offset = (uint32_t) event->time.frames;
+          if (event->time.frames > offset)
+            {
+              write_output (plugin, event->time.frames - offset, offset);
+              offset = (uint32_t) event->time.frames;
+            }
 
           lv2_log_note (&plugin->logger, "KEY: %u, VEL: %u", msg[1], msg[2]);
 
@@ -163,7 +166,8 @@ run (LV2_Handle instance, uint32_t nframes)
         }
     }
 
-  write_output (plugin, nframes - offset, offset);
+  if (nframes > offset)
+    write_output (plugin, nframes - offset, offset);
 }
 
 /* Free any resources allocated in `activate'.  */
