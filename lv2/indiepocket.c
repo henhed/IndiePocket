@@ -14,38 +14,16 @@
 #include "../pckt/kit.h"
 #include "../pckt/sound.h"
 #include "../pckt/drum.h"
+#include "indiepocket_io.h"
 
-#define PCKT_URI "http://www.henhed.se/lv2/indiepocket"
 #define MAX_NUM_SOUNDS 32
 
-/* Named port numbers.  */
-enum {
-  AUDIO_OUT_KICK_1 = 0,
-  AUDIO_OUT_KICK_2,
-  AUDIO_OUT_SNARE_1,
-  AUDIO_OUT_SNARE_2,
-  AUDIO_OUT_HIHAT_1,
-  AUDIO_OUT_HIHAT_2,
-  AUDIO_OUT_TOM_1,
-  AUDIO_OUT_TOM_2,
-  AUDIO_OUT_TOM_3,
-  AUDIO_OUT_TOM_4,
-  AUDIO_OUT_CYM_1,
-  AUDIO_OUT_CYM_2,
-  AUDIO_OUT_CYM_3,
-  AUDIO_OUT_CYM_4,
-  AUDIO_OUT_ROOM_1,
-  AUDIO_OUT_ROOM_2,
-  MIDI_IN,
-  NUM_PORTS
-};
-
 typedef struct {
-  LV2_URID midi_urid;
+  IPIOURIs uris;
   LV2_Log_Log *log;
   LV2_Log_Logger logger;
   uint32_t samplerate;
-  void *ports[NUM_PORTS];
+  void *ports[IPIO_NUM_PORTS];
   PcktKit *kit;
   PcktSoundPool *pool;
 } IndiePocket;
@@ -80,7 +58,7 @@ instantiate (const LV2_Descriptor *descriptor, double rate,
       return NULL;
     }
 
-  plugin->midi_urid = map->map (map->handle, LV2_MIDI__MidiEvent);
+  ipio_map_uris (&plugin->uris, map);
   plugin->samplerate = (uint32_t) rate;
   plugin->kit = NULL;
   plugin->pool = pckt_soundpool_new (MAX_NUM_SOUNDS);
@@ -94,7 +72,7 @@ static void
 connect_port (LV2_Handle instance, uint32_t port, void *data)
 {
   IndiePocket *plugin = (IndiePocket *) instance;
-  if (port < NUM_PORTS)
+  if (port < IPIO_NUM_PORTS)
     plugin->ports[port] = data;
 }
 
@@ -107,17 +85,42 @@ activate (LV2_Handle instance)
   (void) plugin;
 }
 
+/* Handle incoming non-midi events in the audio thread.  */
+static void
+handle_event (IndiePocket *plugin, LV2_Atom_Event *event)
+{
+  if (event->body.type != plugin->uris.atom_Blank)
+    {
+      lv2_log_trace (&plugin->logger,
+                     "Unknown event type %d", event->body.type);
+      return;
+    }
+
+  const LV2_Atom_Object *obj = (const LV2_Atom_Object *) &event->body;
+  if (obj->body.otype == plugin->uris.patch_Set)
+    {
+      const LV2_Atom *kit_path = ipio_atom_get_kit_file (&plugin->uris, obj);
+      if (kit_path)
+        {
+          lv2_log_note (&plugin->logger,
+                        "Recieved request to load: \"%s\"",
+                        (const char *) LV2_ATOM_BODY_CONST (kit_path));
+        }
+    }
+}
+
 /* Generate NFRAMES frames starting at OFFSET in plugin ouput.  */
 static void
 write_output (IndiePocket *plugin, uint32_t nframes, uint32_t offset)
 {
-  if (nframes == 0)
+  if (!plugin->kit || nframes == 0)
     return;
 
   float *out[PCKT_NCHANNELS];
-  memset (out, 0, PCKT_NCHANNELS * sizeof (float *));
-  for (uint32_t port = 0; port < MIDI_IN && port < PCKT_NCHANNELS; ++port)
-    out[port] = ((float *) plugin->ports[port]) + offset;
+  for (uint32_t port = 0; port < PCKT_NCHANNELS; ++port)
+    out[port] = (IPIO_IS_AUDIO_OUT_PORT (port)
+                 ? ((float *) plugin->ports[port]) + offset
+                 :  NULL);
 
   PcktSound *sound;
   uint32_t i = 0;
@@ -131,16 +134,17 @@ static void
 run (LV2_Handle instance, uint32_t nframes)
 {
   IndiePocket *plugin = (IndiePocket *) instance;
-  if (!plugin->kit)
-    return;
 
   uint32_t offset = 0;
   const LV2_Atom_Sequence *events =
-    (const LV2_Atom_Sequence *) plugin->ports[MIDI_IN];
+    (const LV2_Atom_Sequence *) plugin->ports[IPIO_ATOM_IN];
   LV2_ATOM_SEQUENCE_FOREACH (events, event)
     {
-      if (event->body.type != plugin->midi_urid)
-        continue;
+      if (event->body.type != plugin->uris.midi_Event)
+        {
+          handle_event (plugin, event);
+          continue;
+        }
       const uint8_t * const msg = (const uint8_t *) (event + 1);
       if (lv2_midi_message_type (msg) == LV2_MIDI_MSG_NOTE_ON)
         {
@@ -149,8 +153,6 @@ run (LV2_Handle instance, uint32_t nframes)
               write_output (plugin, event->time.frames - offset, offset);
               offset = (uint32_t) event->time.frames;
             }
-
-          lv2_log_note (&plugin->logger, "KEY: %u, VEL: %u", msg[1], msg[2]);
 
           /* Make a sound if there is a drum for the pressed MIDI note.  */
           PcktDrum *drum = pckt_kit_get_drum (plugin->kit, (int8_t) msg[1]);
@@ -198,7 +200,7 @@ extension_data (const char *uri)
 
 /* IndiePocket plugin descriptor.  */
 static const LV2_Descriptor descriptor = {
-  PCKT_URI,
+  INDIEPOCKET_URI,
   instantiate,
   connect_port,
   activate,

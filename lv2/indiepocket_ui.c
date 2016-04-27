@@ -9,11 +9,13 @@
 /* GTK+ headers.  */
 #include <gtk/gtk.h>
 
-#define PCKT_UI_URI "http://www.henhed.se/lv2/indiepocket#ui"
+/* IndiePocket headers.  */
+#include "indiepocket_io.h"
 
 typedef struct {
   LV2_Atom_Forge forge;
   LV2_URID_Map *map;
+  IPIOURIs uris;
   LV2UI_Write_Function write;
   LV2UI_Controller controller;
   GtkWidget *button;
@@ -23,8 +25,8 @@ typedef struct {
 static void
 on_load_clicked (GtkWidget *widget, void *handle)
 {
+  IndiePocketUI *ui = (IndiePocketUI *) handle;
   (void) widget;
-  (void) handle;
 
   GtkWidget *dialog;
   dialog = gtk_file_chooser_dialog_new("Load Kit", NULL,
@@ -42,7 +44,13 @@ on_load_clicked (GtkWidget *widget, void *handle)
   char *filename = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER (dialog));
   gtk_widget_destroy (dialog);
 
-  printf ("indiepocket_ui.c: Opened %s\n", filename);
+  uint8_t forgebuf[IPIO_FORGE_BUFFER_SIZE];
+  lv2_atom_forge_set_buffer (&ui->forge, forgebuf, IPIO_FORGE_BUFFER_SIZE);
+  LV2_Atom *kitmsg = ipio_forge_kit_file_atom (&ui->forge, &ui->uris,
+                                               filename, strlen (filename));
+
+  ui->write (ui->controller, IPIO_ATOM_IN, lv2_atom_total_size (kitmsg),
+             ui->uris.atom_eventTransfer, kitmsg);
 
   g_free (filename);
 }
@@ -82,6 +90,7 @@ instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
       return NULL;
     }
 
+  ipio_map_uris (&ui->uris, ui->map);
   lv2_atom_forge_init (&ui->forge, ui->map);
 
   ui->button = gtk_button_new_with_label ("Load Kit");
@@ -124,7 +133,7 @@ extension_data (const char *uri)
 
 /* IndiePocket UI descriptor.  */
 static const LV2UI_Descriptor descriptor = {
-  PCKT_UI_URI,
+  INDIEPOCKET_UI_URI,
   instantiate,
   cleanup,
   port_event,

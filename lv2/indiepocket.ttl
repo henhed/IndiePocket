@@ -147,8 +147,8 @@ pckt:OutputGroup
         atom:supports midi:MidiEvent ;
         lv2:designation lv2:control ;
         lv2:index 16 ;
-        lv2:symbol "MIDI_IN" ;
-        lv2:name "MIDI In" ;
+        lv2:symbol "ATOM_IN" ;
+        lv2:name "Atom In" ;
     ] .
 
 <http://www.henhed.se/lv2/indiepocket#ui>
