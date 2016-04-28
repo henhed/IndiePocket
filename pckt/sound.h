@@ -35,6 +35,7 @@ extern void pckt_soundpool_free (PcktSoundPool *);
 extern PcktSound *pckt_soundpool_at (PcktSoundPool *, uint32_t);
 extern PcktSound *pckt_soundpool_get (PcktSoundPool *, const void *);
 extern bool pckt_soundpool_choke (PcktSoundPool *, const void *);
+extern bool pckt_soundpool_clear (PcktSoundPool *);
 extern bool pckt_sound_clear (PcktSound *);
 extern int32_t pckt_sound_process (PcktSound *, float **, size_t, uint32_t);
 

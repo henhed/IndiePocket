@@ -17,10 +17,7 @@ pckt_soundpool_new (size_t poolsize)
         {
           pool->sounds = malloc (poolsize * sizeof (PcktSound));
           if (pool->sounds)
-            {
-              for (uint32_t i = 0; i < poolsize; ++i)
-                pckt_sound_clear (pool->sounds + i);
-            }
+            pckt_soundpool_clear (pool);
           else
             {
               free (pool);
@@ -102,6 +99,18 @@ pckt_soundpool_choke (PcktSoundPool *pool, const void *source)
       if (pool->sounds[i].source == source)
         pool->sounds[i].choke = true;
     }
+  return true;
+}
+
+bool
+pckt_soundpool_clear (PcktSoundPool *pool)
+{
+  if (!pool)
+    return false;
+
+  for (uint32_t i = 0; i < pool->nsounds; ++i)
+    pckt_sound_clear (pool->sounds + i);
+
   return true;
 }
 
