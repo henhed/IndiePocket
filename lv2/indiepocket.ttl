@@ -6,6 +6,7 @@
 @prefix midi:  <http://lv2plug.in/ns/ext/midi#> .
 @prefix ui:    <http://lv2plug.in/ns/extensions/ui#> .
 @prefix pg:    <http://lv2plug.in/ns/ext/port-groups#> .
+@prefix work:  <http://lv2plug.in/ns/ext/worker#> .
 @prefix pckt:  <http://www.henhed.se/lv2/indiepocket#> .
 
 <http://www.henhed.se/about#me>
@@ -25,8 +26,10 @@ pckt:OutputGroup
     doap:name "IndiePocket" ;
     doap:maintainer <http://www.henhed.se/about#me> ;
     doap:license <http://www.gnu.org/licenses/gpl.html> ;
-    lv2:requiredFeature urid:map ;
+    lv2:requiredFeature urid:map ,
+        work:schedule ;
     lv2:optionalFeature lv2:hardRTCapable ;
+    lv2:extensionData work:interface ;
     ui:ui <http://www.henhed.se/lv2/indiepocket#ui> ;
     lv2:port [
         a lv2:AudioPort ,

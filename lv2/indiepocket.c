@@ -9,6 +9,7 @@
 #include <lv2/lv2plug.in/ns/ext/midi/midi.h>
 #include <lv2/lv2plug.in/ns/ext/atom/atom.h>
 #include <lv2/lv2plug.in/ns/ext/atom/util.h>
+#include <lv2/lv2plug.in/ns/ext/worker/worker.h>
 
 /* IndiePocket headers.  */
 #include "../pckt/kit.h"
@@ -22,6 +23,7 @@ typedef struct {
   IPIOURIs uris;
   LV2_Log_Log *log;
   LV2_Log_Logger logger;
+  LV2_Worker_Schedule *schedule;
   uint32_t samplerate;
   void *ports[IPIO_NUM_PORTS];
   PcktKit *kit;
@@ -48,12 +50,20 @@ instantiate (const LV2_Descriptor *descriptor, double rate,
       map = (LV2_URID_Map *) features[i]->data;
     else if (!strcmp (features[i]->URI, LV2_LOG__log))
       plugin->log = (LV2_Log_Log *) features[i]->data;
+    else if (!strcmp (features[i]->URI, LV2_WORKER__schedule))
+      plugin->schedule = (LV2_Worker_Schedule *) features[i]->data;
 
   lv2_log_logger_init (&plugin->logger, map, plugin->log);
 
   if (!map)
     {
       lv2_log_error (&plugin->logger, "Missing feature uri:map");
+      free (plugin);
+      return NULL;
+    }
+  else if (!plugin->schedule)
+    {
+      lv2_log_error (&plugin->logger, "Missing feature work:schedule");
       free (plugin);
       return NULL;
     }
@@ -86,7 +96,7 @@ activate (LV2_Handle instance)
 }
 
 /* Handle incoming non-midi events in the audio thread.  */
-static void
+static inline void
 handle_event (IndiePocket *plugin, LV2_Atom_Event *event)
 {
   if (event->body.type != plugin->uris.atom_Blank)
@@ -99,14 +109,30 @@ handle_event (IndiePocket *plugin, LV2_Atom_Event *event)
   const LV2_Atom_Object *obj = (const LV2_Atom_Object *) &event->body;
   if (obj->body.otype == plugin->uris.patch_Set)
     {
-      const LV2_Atom *kit_path = ipio_atom_get_kit_file (&plugin->uris, obj);
-      if (kit_path)
+      const LV2_Atom *prop = NULL, *val = NULL;
+      lv2_atom_object_get (obj, plugin->uris.patch_property, &prop,
+                           plugin->uris.patch_value, &val, 0);
+      if (!prop)
         {
-          lv2_log_note (&plugin->logger,
-                        "Recieved request to load: \"%s\"",
-                        (const char *) LV2_ATOM_BODY_CONST (kit_path));
+          lv2_log_error (&plugin->logger, "patch:Set missing property");
+          return;
         }
+      else if (prop->type != plugin->uris.atom_URID)
+        {
+          lv2_log_error (&plugin->logger, "patch:Set property is not a URID");
+          return;
+        }
+
+      const uint32_t key = ((const LV2_Atom_URID *) prop)->body;
+      if (key == plugin->uris.pckt_Kit)
+        plugin->schedule->schedule_work (plugin->schedule->handle,
+                                         lv2_atom_total_size (&event->body),
+                                         &event->body);
+      else
+        lv2_log_error (&plugin->logger, "Unknown patch:Set property %u", key);
     }
+  else
+    lv2_log_trace (&plugin->logger, "Unknown object type %d", obj->body.otype);
 }
 
 /* Generate NFRAMES frames starting at OFFSET in plugin ouput.  */
@@ -185,16 +211,61 @@ static void
 cleanup (LV2_Handle instance)
 {
   IndiePocket *plugin = (IndiePocket *) instance;
-  pckt_kit_free (plugin->kit);
+  if (plugin->kit)
+    pckt_kit_free (plugin->kit);
   pckt_soundpool_free (plugin->pool);
   free (plugin);
 }
+
+/* Handle scheduled non-realtime work.  */
+static LV2_Worker_Status
+work (LV2_Handle instance, LV2_Worker_Respond_Function respond,
+      LV2_Worker_Respond_Handle handle, uint32_t size, const void *data)
+{
+  IndiePocket *plugin = (IndiePocket *) instance;
+  (void) size;
+
+  const LV2_Atom_Object *obj = (const LV2_Atom_Object *) data;
+  const LV2_Atom *kit_path = ipio_atom_get_kit_file (&plugin->uris, obj);
+  if (!kit_path)
+    return LV2_WORKER_ERR_UNKNOWN;
+
+  lv2_log_note (&plugin->logger,
+                "indiepocket.c: loading kit \"%s\"",
+                (const char *) LV2_ATOM_BODY_CONST (kit_path));
+
+  respond (handle, 0, NULL);
+
+  return LV2_WORKER_SUCCESS;
+}
+
+/* Apply `work' result in audio thread.  */
+static LV2_Worker_Status
+work_response (LV2_Handle instance, uint32_t size, const void *data)
+{
+  IndiePocket *plugin = (IndiePocket *) instance;
+  (void) size;
+  (void) data;
+
+  lv2_log_note (&plugin->logger, "indiepocket.c: loading kit done");
+
+  return LV2_WORKER_SUCCESS;
+}
+
+/* IndiePocket worker descriptor.  */
+static const LV2_Worker_Interface worker = {
+  work,
+  work_response,
+  NULL /* `end_run' N/A.  */
+};
 
 /* Return any extension data supported by this plugin.  */
 static const void *
 extension_data (const char *uri)
 {
-  (void) uri;
+  if (!strcmp (uri, LV2_WORKER__interface))
+    return &worker;
+
   return NULL;
 }
 
