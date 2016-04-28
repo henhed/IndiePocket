@@ -8,9 +8,9 @@
 #include <lv2/lv2plug.in/ns/ext/atom/atom.h>
 #include <lv2/lv2plug.in/ns/ext/atom/forge.h>
 
-#define INDIEPOCKET_URI "http://www.henhed.se/lv2/indiepocket"
-#define INDIEPOCKET_URI_PREFIX INDIEPOCKET_URI "#"
-#define INDIEPOCKET_UI_URI INDIEPOCKET_URI_PREFIX "ui"
+#define IPCKT_URI "http://www.henhed.se/lv2/indiepocket"
+#define IPCKT_URI_PREFIX IPCKT_URI "#"
+#define IPCKT_UI_URI IPCKT_URI_PREFIX "ui"
 
 typedef enum {
   IPIO_AUDIO_OUT_KICK_1 = 0,
@@ -43,6 +43,7 @@ typedef struct {
   LV2_URID patch_property;
   LV2_URID patch_value;
   LV2_URID pckt_Kit;
+  LV2_URID pckt_freeKit;
 } IPIOURIs;
 
 #define IPIO_IS_AUDIO_OUT_PORT(port) \
@@ -61,7 +62,8 @@ ipio_map_uris (IPIOURIs *uris, LV2_URID_Map *map)
   uris->patch_Set = map->map (map->handle, LV2_PATCH__Set);
   uris->patch_property = map->map (map->handle, LV2_PATCH__property);
   uris->patch_value = map->map (map->handle, LV2_PATCH__value);
-  uris->pckt_Kit = map->map (map->handle, INDIEPOCKET_URI_PREFIX "Kit");
+  uris->pckt_Kit = map->map (map->handle, IPCKT_URI_PREFIX "Kit");
+  uris->pckt_freeKit = map->map (map->handle, IPCKT_URI_PREFIX "freeKit");
 }
 
 static inline LV2_Atom *

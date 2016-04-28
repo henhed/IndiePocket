@@ -133,7 +133,7 @@ extension_data (const char *uri)
 
 /* IndiePocket UI descriptor.  */
 static const LV2UI_Descriptor descriptor = {
-  INDIEPOCKET_UI_URI,
+  IPCKT_UI_URI,
   instantiate,
   cleanup,
   port_event,

@@ -19,6 +19,7 @@
 
 #define MAX_NUM_SOUNDS 32
 
+/* Plugin struct.  */
 typedef struct {
   IPIOURIs uris;
   LV2_Log_Log *log;
@@ -30,6 +31,13 @@ typedef struct {
   PcktSoundPool *pool;
 } IndiePocket;
 
+/* Internal worker message struct.  */
+typedef struct {
+  LV2_Atom atom;
+  void *data;
+} IndiePocketMessage;
+
+/* Set up plugin.  */
 static LV2_Handle
 instantiate (const LV2_Descriptor *descriptor, double rate,
              const char *bundle_path,
@@ -225,16 +233,31 @@ work (LV2_Handle instance, LV2_Worker_Respond_Function respond,
   IndiePocket *plugin = (IndiePocket *) instance;
   (void) size;
 
-  const LV2_Atom_Object *obj = (const LV2_Atom_Object *) data;
-  const LV2_Atom *kit_path = ipio_atom_get_kit_file (&plugin->uris, obj);
-  if (!kit_path)
-    return LV2_WORKER_ERR_UNKNOWN;
+  const LV2_Atom *atom = (const LV2_Atom *) data;
+  if (atom->type == plugin->uris.pckt_freeKit)
+    {
+      const IndiePocketMessage *msg = (const IndiePocketMessage *) data;
+      lv2_log_note (&plugin->logger, "Freeing old kit");
+      pckt_kit_free ((PcktKit *) msg->data);
+    }
+  else
+    {
+      const LV2_Atom_Object *obj = (const LV2_Atom_Object *) data;
+      const LV2_Atom *kit_path = ipio_atom_get_kit_file (&plugin->uris, obj);
+      if (!kit_path)
+        return LV2_WORKER_ERR_UNKNOWN;
 
-  lv2_log_note (&plugin->logger,
-                "indiepocket.c: loading kit \"%s\"",
-                (const char *) LV2_ATOM_BODY_CONST (kit_path));
+      const char *filename = (const char *) LV2_ATOM_BODY_CONST (kit_path);
+      lv2_log_note (&plugin->logger, "Loading \"%s\"", filename);
+      PcktKit *kit = pckt_kit_factory (filename);
+      if (!kit)
+        {
+          lv2_log_error (&plugin->logger, "Failed to load \"%s\"", filename);
+          return LV2_WORKER_ERR_UNKNOWN;
+        }
 
-  respond (handle, 0, NULL);
+      respond (handle, sizeof (PcktKit *), &kit);
+    }
 
   return LV2_WORKER_SUCCESS;
 }
@@ -245,9 +268,22 @@ work_response (LV2_Handle instance, uint32_t size, const void *data)
 {
   IndiePocket *plugin = (IndiePocket *) instance;
   (void) size;
-  (void) data;
 
-  lv2_log_note (&plugin->logger, "indiepocket.c: loading kit done");
+  if (plugin->kit)
+    {
+      /* Kill all current sounds since they hold references to samples that
+         will be freed by the kit.  */
+      pckt_soundpool_clear (plugin->pool);
+      /* Tell worker to free the old kit.  */
+      IndiePocketMessage msg = {
+        {sizeof (PcktKit *), plugin->uris.pckt_freeKit},
+        plugin->kit
+      };
+      plugin->schedule->schedule_work (plugin->schedule->handle,
+                                       sizeof (msg), &msg);
+    }
+
+  plugin->kit = *(PcktKit * const *) data;
 
   return LV2_WORKER_SUCCESS;
 }
@@ -271,7 +307,7 @@ extension_data (const char *uri)
 
 /* IndiePocket plugin descriptor.  */
 static const LV2_Descriptor descriptor = {
-  INDIEPOCKET_URI,
+  IPCKT_URI,
   instantiate,
   connect_port,
   activate,
