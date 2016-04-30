@@ -23,33 +23,19 @@ typedef struct {
 
 /* Load kit button click callback.  */
 static void
-on_load_clicked (GtkWidget *widget, void *handle)
+on_file_selected (GtkWidget *widget, void *handle)
 {
   IndiePocketUI *ui = (IndiePocketUI *) handle;
-  (void) widget;
+  char *filename = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER (widget));
 
-  GtkWidget *dialog;
-  dialog = gtk_file_chooser_dialog_new("Load Kit", NULL,
-                                       GTK_FILE_CHOOSER_ACTION_OPEN,
-                                       GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
-                                       GTK_STOCK_OPEN, GTK_RESPONSE_ACCEPT,
-                                       NULL);
-
-  if (gtk_dialog_run (GTK_DIALOG (dialog)) != GTK_RESPONSE_ACCEPT)
-    {
-      gtk_widget_destroy (dialog);
-      return;
-    }
-
-  char *filename = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER (dialog));
-  gtk_widget_destroy (dialog);
+  gtk_widget_set_sensitive (widget, FALSE);
 
   uint8_t forgebuf[IPIO_FORGE_BUFFER_SIZE];
   lv2_atom_forge_set_buffer (&ui->forge, forgebuf, IPIO_FORGE_BUFFER_SIZE);
   LV2_Atom *kitmsg = ipio_forge_kit_file_atom (&ui->forge, &ui->uris,
-                                               filename, strlen (filename));
+                                               filename);
 
-  ui->write (ui->controller, IPIO_ATOM_IN, lv2_atom_total_size (kitmsg),
+  ui->write (ui->controller, IPIO_CONTROL, lv2_atom_total_size (kitmsg),
              ui->uris.atom_eventTransfer, kitmsg);
 
   g_free (filename);
@@ -93,8 +79,9 @@ instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
   ipio_map_uris (&ui->uris, ui->map);
   lv2_atom_forge_init (&ui->forge, ui->map);
 
-  ui->button = gtk_button_new_with_label ("Load Kit");
-  g_signal_connect (ui->button, "clicked", G_CALLBACK (on_load_clicked), ui);
+  ui->button = gtk_file_chooser_button_new (NULL,
+                                            GTK_FILE_CHOOSER_ACTION_OPEN);
+  g_signal_connect (ui->button, "file-set", G_CALLBACK (on_file_selected), ui);
 
   *widget = ui->button;
 
@@ -116,11 +103,42 @@ port_event (LV2UI_Handle handle, uint32_t port_index, uint32_t buffer_size,
             uint32_t format, const void *buffer)
 {
   IndiePocketUI *ui = (IndiePocketUI *) handle;
-  (void) ui;
   (void) port_index;
   (void) buffer_size;
-  (void) format;
-  (void) buffer;
+
+  if (format != ui->uris.atom_eventTransfer)
+    {
+      fprintf (stderr, "Unknown format\n");
+      return;
+    }
+
+  const LV2_Atom *atom = (const LV2_Atom *) buffer;
+  if (!ipio_atom_type_is_object (&ui->forge, atom->type))
+    {
+      fprintf (stderr, "Unknown message type.\n");
+      return;
+    }
+
+  const LV2_Atom_Object *obj = (const LV2_Atom_Object *) atom;
+  const LV2_Atom *kit_path = ipio_atom_get_kit_file (&ui->uris, obj);
+  if (!kit_path)
+    {
+      fprintf (stderr, "Unknown message sent to UI.\n");
+      return;
+    }
+
+  const char *filename = (const char *) LV2_ATOM_BODY_CONST (kit_path);
+  if (strlen (filename))
+    {
+      GFile *kit_file = g_file_new_for_path (filename);
+      gtk_file_chooser_select_file (GTK_FILE_CHOOSER (ui->button), kit_file,
+                                    NULL);
+      g_object_unref (kit_file);
+    }
+  else
+    gtk_file_chooser_unselect_all (GTK_FILE_CHOOSER (ui->button));
+
+  gtk_widget_set_sensitive (ui->button, TRUE);
 }
 
 /* Return any extension data supported by this UI.  */

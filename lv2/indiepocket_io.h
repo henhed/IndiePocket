@@ -2,6 +2,7 @@
 #define INDIEPOCKET_IO_H 1
 
 #include <stdio.h>
+#include <stdbool.h>
 
 #include <lv2/lv2plug.in/ns/ext/midi/midi.h>
 #include <lv2/lv2plug.in/ns/ext/patch/patch.h>
@@ -29,7 +30,8 @@ typedef enum {
   IPIO_AUDIO_OUT_CYM_4,
   IPIO_AUDIO_OUT_ROOM_1,
   IPIO_AUDIO_OUT_ROOM_2,
-  IPIO_ATOM_IN,
+  IPIO_CONTROL,
+  IPIO_NOTIFY,
   IPIO_NUM_PORTS
 } IPIOPort;
 
@@ -47,7 +49,7 @@ typedef struct {
 } IPIOURIs;
 
 #define IPIO_IS_AUDIO_OUT_PORT(port) \
-  ((uint32_t) (port) < IPIO_ATOM_IN)
+  ((uint32_t) (port) < IPIO_CONTROL)
 
 #define IPIO_FORGE_BUFFER_SIZE 1024
 
@@ -66,9 +68,15 @@ ipio_map_uris (IPIOURIs *uris, LV2_URID_Map *map)
   uris->pckt_freeKit = map->map (map->handle, IPCKT_URI_PREFIX "freeKit");
 }
 
+static inline bool
+ipio_atom_type_is_object (const LV2_Atom_Forge* forge, uint32_t type)
+{
+  return type == forge->Blank || type == forge->Resource;
+}
+
 static inline LV2_Atom *
 ipio_forge_kit_file_atom (LV2_Atom_Forge *forge, const IPIOURIs *uris,
-                          const char *path, const uint32_t pathlen)
+                          const char *path)
 {
   LV2_Atom_Forge_Frame frame;
   LV2_Atom *msg = (LV2_Atom *) lv2_atom_forge_blank (forge, &frame, 1,
@@ -77,7 +85,7 @@ ipio_forge_kit_file_atom (LV2_Atom_Forge *forge, const IPIOURIs *uris,
   lv2_atom_forge_property_head (forge, uris->patch_property, 0);
   lv2_atom_forge_urid (forge, uris->pckt_Kit);
   lv2_atom_forge_property_head (forge, uris->patch_value, 0);
-  lv2_atom_forge_path (forge, path, pathlen);
+  lv2_atom_forge_path (forge, path, strlen (path));
 
   lv2_atom_forge_pop (forge, &frame);
 

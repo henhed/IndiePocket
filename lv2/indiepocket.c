@@ -1,5 +1,6 @@
 /* Standard headers.  */
 #include <stdlib.h>
+#include <string.h>
 
 /* LV2 headers.  */
 #include <lv2/lv2plug.in/ns/lv2core/lv2.h>
@@ -24,18 +25,23 @@ typedef struct {
   IPIOURIs uris;
   LV2_Log_Log *log;
   LV2_Log_Logger logger;
+  LV2_Atom_Forge forge;
+  LV2_Atom_Forge_Frame notify_frame;
   LV2_Worker_Schedule *schedule;
   uint32_t samplerate;
+  uint32_t frame_offset;
   void *ports[IPIO_NUM_PORTS];
   PcktKit *kit;
+  char *kit_filename;
   PcktSoundPool *pool;
 } IndiePocket;
 
-/* Internal worker message struct.  */
+/* Internal kit message struct.  */
 typedef struct {
   LV2_Atom atom;
-  void *data;
-} IndiePocketMessage;
+  PcktKit *kit;
+  char *kit_filename;
+} IPcktKitMsg;
 
 /* Set up plugin.  */
 static LV2_Handle
@@ -77,6 +83,7 @@ instantiate (const LV2_Descriptor *descriptor, double rate,
     }
 
   ipio_map_uris (&plugin->uris, map);
+  lv2_atom_forge_init (&plugin->forge, map);
   plugin->samplerate = (uint32_t) rate;
   plugin->kit = NULL;
   plugin->pool = pckt_soundpool_new (MAX_NUM_SOUNDS);
@@ -107,7 +114,7 @@ activate (LV2_Handle instance)
 static inline void
 handle_event (IndiePocket *plugin, LV2_Atom_Event *event)
 {
-  if (event->body.type != plugin->uris.atom_Blank)
+  if (!ipio_atom_type_is_object (&plugin->forge, event->body.type))
     {
       lv2_log_trace (&plugin->logger,
                      "Unknown event type %d", event->body.type);
@@ -168,12 +175,21 @@ static void
 run (LV2_Handle instance, uint32_t nframes)
 {
   IndiePocket *plugin = (IndiePocket *) instance;
-
   uint32_t offset = 0;
+  plugin->frame_offset = 0;
+
+  /* Connect forge to notify output port.  */
+  LV2_Atom_Sequence *notify = (LV2_Atom_Sequence *) plugin->ports[IPIO_NOTIFY];
+  lv2_atom_forge_set_buffer (&plugin->forge, (uint8_t *) notify,
+                             notify->atom.size);
+  lv2_atom_forge_sequence_head (&plugin->forge, &plugin->notify_frame, 0);
+
+  /* Read incoming events.  */
   const LV2_Atom_Sequence *events =
-    (const LV2_Atom_Sequence *) plugin->ports[IPIO_ATOM_IN];
+    (const LV2_Atom_Sequence *) plugin->ports[IPIO_CONTROL];
   LV2_ATOM_SEQUENCE_FOREACH (events, event)
     {
+      plugin->frame_offset = event->time.frames;
       if (event->body.type != plugin->uris.midi_Event)
         {
           handle_event (plugin, event);
@@ -204,6 +220,8 @@ run (LV2_Handle instance, uint32_t nframes)
 
   if (nframes > offset)
     write_output (plugin, nframes - offset, offset);
+
+  plugin->frame_offset = nframes;
 }
 
 /* Free any resources allocated in `activate'.  */
@@ -221,6 +239,8 @@ cleanup (LV2_Handle instance)
   IndiePocket *plugin = (IndiePocket *) instance;
   if (plugin->kit)
     pckt_kit_free (plugin->kit);
+  if (plugin->kit_filename)
+    free (plugin->kit_filename);
   pckt_soundpool_free (plugin->pool);
   free (plugin);
 }
@@ -236,9 +256,10 @@ work (LV2_Handle instance, LV2_Worker_Respond_Function respond,
   const LV2_Atom *atom = (const LV2_Atom *) data;
   if (atom->type == plugin->uris.pckt_freeKit)
     {
-      const IndiePocketMessage *msg = (const IndiePocketMessage *) data;
-      lv2_log_note (&plugin->logger, "Freeing old kit");
-      pckt_kit_free ((PcktKit *) msg->data);
+      const IPcktKitMsg *msg = (const IPcktKitMsg *) data;
+      lv2_log_note (&plugin->logger, "Freeing kit %s\n", msg->kit_filename);
+      pckt_kit_free (msg->kit);
+      free (msg->kit_filename);
     }
   else
     {
@@ -248,15 +269,18 @@ work (LV2_Handle instance, LV2_Worker_Respond_Function respond,
         return LV2_WORKER_ERR_UNKNOWN;
 
       const char *filename = (const char *) LV2_ATOM_BODY_CONST (kit_path);
-      lv2_log_note (&plugin->logger, "Loading \"%s\"", filename);
+      lv2_log_note (&plugin->logger, "Loading %s\n", filename);
       PcktKit *kit = pckt_kit_factory (filename);
       if (!kit)
-        {
-          lv2_log_error (&plugin->logger, "Failed to load \"%s\"", filename);
-          return LV2_WORKER_ERR_UNKNOWN;
-        }
+        lv2_log_error (&plugin->logger, "Failed to load %s\n", filename);
 
-      respond (handle, sizeof (PcktKit *), &kit);
+      IPcktKitMsg msg = {
+        {sizeof (PcktKit *) + sizeof (char *), plugin->uris.pckt_Kit},
+        kit,
+        (char *) malloc (strlen (filename) + 1)
+      };
+      strcpy (msg.kit_filename, filename);
+      respond (handle, sizeof (IPcktKitMsg), &msg);
     }
 
   return LV2_WORKER_SUCCESS;
@@ -267,23 +291,38 @@ static LV2_Worker_Status
 work_response (LV2_Handle instance, uint32_t size, const void *data)
 {
   IndiePocket *plugin = (IndiePocket *) instance;
-  (void) size;
+  if (size != sizeof (IPcktKitMsg))
+    return LV2_WORKER_ERR_UNKNOWN;
 
-  if (plugin->kit)
+  const IPcktKitMsg *kitmsg_new = (const IPcktKitMsg *) data;
+
+  if (kitmsg_new->kit && plugin->kit)
     {
       /* Kill all current sounds since they hold references to samples that
          will be freed by the kit.  */
       pckt_soundpool_clear (plugin->pool);
       /* Tell worker to free the old kit.  */
-      IndiePocketMessage msg = {
-        {sizeof (PcktKit *), plugin->uris.pckt_freeKit},
-        plugin->kit
+      IPcktKitMsg kitmsg_free = {
+        {sizeof (PcktKit *) + sizeof (char *), plugin->uris.pckt_freeKit},
+        plugin->kit,
+        plugin->kit_filename
       };
       plugin->schedule->schedule_work (plugin->schedule->handle,
-                                       sizeof (msg), &msg);
+                                       sizeof (IPcktKitMsg), &kitmsg_free);
     }
 
-  plugin->kit = *(PcktKit * const *) data;
+  if (kitmsg_new->kit)
+    {
+      plugin->kit = kitmsg_new->kit;
+      plugin->kit_filename = kitmsg_new->kit_filename;
+    }
+
+  lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
+  if (plugin->kit)
+    ipio_forge_kit_file_atom (&plugin->forge, &plugin->uris,
+                              plugin->kit_filename);
+  else
+    ipio_forge_kit_file_atom (&plugin->forge, &plugin->uris, "");
 
   return LV2_WORKER_SUCCESS;
 }

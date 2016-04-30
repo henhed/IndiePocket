@@ -7,6 +7,7 @@
 @prefix ui:    <http://lv2plug.in/ns/extensions/ui#> .
 @prefix pg:    <http://lv2plug.in/ns/ext/port-groups#> .
 @prefix work:  <http://lv2plug.in/ns/ext/worker#> .
+@prefix patch: <http://lv2plug.in/ns/ext/patch#> .
 @prefix pckt:  <http://www.henhed.se/lv2/indiepocket#> .
 
 <http://www.henhed.se/about#me>
@@ -147,11 +148,21 @@ pckt:OutputGroup
         a lv2:InputPort ,
             atom:AtomPort ;
         atom:bufferType atom:Sequence ;
-        atom:supports midi:MidiEvent ;
+        atom:supports midi:MidiEvent ,
+            patch:Message ;
         lv2:designation lv2:control ;
         lv2:index 16 ;
-        lv2:symbol "ATOM_IN" ;
-        lv2:name "Atom In" ;
+        lv2:symbol "CONTROL" ;
+        lv2:name "Control" ;
+    ] , [
+        a lv2:OutputPort ,
+            atom:AtomPort ;
+        atom:bufferType atom:Sequence ;
+        atom:supports patch:Message ;
+        lv2:designation lv2:control ;
+        lv2:index 17 ;
+        lv2:symbol "NOTIFY" ;
+        lv2:name "Notify" ;
     ] .
 
 <http://www.henhed.se/lv2/indiepocket#ui>
@@ -160,4 +171,9 @@ pckt:OutputGroup
     doap:name "IndiePocketUI" ;
     doap:maintainer <http://www.henhed.se/about#me> ;
     doap:license <http://www.gnu.org/licenses/gpl.html> ;
-    lv2:requiredFeature urid:map .
+    lv2:requiredFeature urid:map ;
+    ui:portNotification [
+        ui:plugin <http://www.henhed.se/lv2/indiepocket> ;
+        lv2:symbol "NOTIFY" ;
+        ui:notifyType atom:Blank ;
+    ] .
