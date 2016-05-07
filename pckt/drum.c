@@ -7,9 +7,15 @@
 
 struct PcktDrumImpl
 {
+  const PcktDrumMeta *meta;
   PcktSample *samples[PCKT_NCHANNELS][MAX_NUM_SAMPLES];
   size_t nsamples[PCKT_NCHANNELS];
   float bleed[PCKT_NCHANNELS];
+};
+
+struct PcktDrumMetaImpl
+{
+  char *name;
 };
 
 PcktDrum *
@@ -47,6 +53,15 @@ pckt_drum_set_bleed (PcktDrum *drum, PcktChannel ch, float bleed)
   if (!drum || ch < PCKT_CH0 || ch >= PCKT_NCHANNELS || bleed < 0)
     return false;
   drum->bleed[ch] = bleed;
+  return true;
+}
+
+bool
+pckt_drum_set_meta (PcktDrum *drum, const PcktDrumMeta *meta)
+{
+  if (!drum)
+    return false;
+  drum->meta = meta;
   return true;
 }
 
@@ -92,4 +107,47 @@ pckt_drum_hit (const PcktDrum *drum, PcktSound *sound, float force)
   sound->impact = force;
 
   return true;
+}
+
+PcktDrumMeta *
+pckt_drum_meta_new (const char *name)
+{
+  PcktDrumMeta *meta = malloc (sizeof (PcktDrumMeta));
+  if (meta)
+    {
+      memset (meta, 0, sizeof (PcktDrumMeta));
+      if (name)
+        {
+          size_t len = strlen (name);
+          meta->name = malloc (len + 1);
+          if (meta->name)
+            {
+              meta->name[len] = '\0';
+              strncpy (meta->name, name, len);
+            }
+          else
+            {
+              free (meta);
+              meta = NULL;
+            }
+        }
+    }
+  return meta;
+}
+
+void
+pckt_drum_meta_free (PcktDrumMeta *meta)
+{
+  if (meta)
+    {
+      if (meta->name)
+        free (meta->name);
+      free (meta);
+    }
+}
+
+const char *
+pckt_drum_meta_get_name (const PcktDrumMeta *meta)
+{
+  return (meta && meta->name) ? meta->name : NULL;
 }

@@ -11,6 +11,7 @@
 #define URI_PCKT "http://www.freeztile.org/rdf-schema/indiepocket#"
 #define URI_SNTX "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 #define URI_XSD "http://www.w3.org/2001/XMLSchema#"
+#define URI_DOAP "http://usefulinc.com/ns/doap#"
 
 #ifdef _WIN32
 # define DIR_SEP '\\'
@@ -37,6 +38,7 @@ typedef struct {
     SordNode *prop_kit;
     SordNode *prop_key;
     SordNode *prop_mic;
+    SordNode *prop_name;
     SordNode *prop_sample;
     SordNode *prop_sound;
     SordNode *prop_type;
@@ -262,6 +264,22 @@ load_drum (PcktKit *kit, const SordNode *drum_node,
   if (!it)
     return;
 
+  SordNode *name_node = sord_get (sord, drum_node, factory->uris.prop_name,
+                                  NULL, NULL);
+  const char *name = (name_node
+                      ? (const char *) sord_node_get_string (name_node)
+                      : NULL);
+  PcktDrumMeta *meta = pckt_drum_meta_new (name);
+  if (name_node)
+    sord_node_free (sord_get_world (sord), name_node);
+
+  if (!meta || pckt_kit_add_drum_meta (kit, meta) < 0)
+    {
+      if (meta)
+        pckt_drum_meta_free (meta);
+      return;
+    }
+
   for (; !sord_iter_end (it); sord_iter_next (it))
     {
       const SordNode *hit_node = sord_iter_get_node (it, SORD_SUBJECT);
@@ -281,6 +299,7 @@ load_drum (PcktKit *kit, const SordNode *drum_node,
       PcktDrum *drum = load_drum_hit (hit_node, sord, factory);
       if (drum)
         {
+          pckt_drum_set_meta (drum, meta);
           pckt_kit_add_drum (kit, drum, id);
           load_kit_chokes (kit, id, hit_node, sord, factory);
         }
@@ -408,6 +427,7 @@ pckt_kit_factory (const char *filename)
       sord_new_uri (world, (const uint8_t *) URI_PCKT "kit"),
       sord_new_uri (world, (const uint8_t *) URI_PCKT "key"),
       sord_new_uri (world, (const uint8_t *) URI_PCKT "mic"),
+      sord_new_uri (world, (const uint8_t *) URI_DOAP "name"),
       sord_new_uri (world, (const uint8_t *) URI_PCKT "sample"),
       sord_new_uri (world, (const uint8_t *) URI_PCKT "sound"),
       sord_new_uri (world, (const uint8_t *) URI_SNTX "type")
