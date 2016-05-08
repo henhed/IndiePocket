@@ -79,7 +79,7 @@ pckt_kit_add_drum_meta (PcktKit *kit, PcktDrumMeta *meta)
   return -1;
 }
 
-const PcktDrumMeta *
+PcktDrumMeta *
 pckt_kit_get_drum_meta (const PcktKit *kit, int8_t index)
 {
   if (kit && index >= 0)

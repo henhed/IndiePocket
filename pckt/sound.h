@@ -23,6 +23,7 @@ typedef struct
   float bleed[PCKT_NCHANNELS];
   size_t progress[PCKT_NCHANNELS];
   float impact;
+  float pitch;
   float variance;
   bool choke;
   const void *source;

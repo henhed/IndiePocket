@@ -127,6 +127,7 @@ pckt_sound_clear (PcktSound *sound)
       sound->progress[ch] = 0;
     }
   sound->impact = 0;
+  sound->pitch = 0;
   sound->variance = 0;
   sound->choke = false;
   sound->source = NULL;
@@ -149,6 +150,11 @@ pckt_sound_process (PcktSound *sound, float **out, size_t nframes,
   float decay = ((choke && rate > 0)
                  ? (sound->impact / (PCKT_CHOKE_TIME * rate))
                  : 0);
+
+  uint32_t framerate = rate;
+  if (rate && sound->pitch > 0 && sound->pitch != 1)
+    framerate = rate / sound->pitch;
+
   PcktChannel ch;
   uint32_t i;
   for (ch = PCKT_CH0; ch < PCKT_NCHANNELS; ++ch)
@@ -159,9 +165,12 @@ pckt_sound_process (PcktSound *sound, float **out, size_t nframes,
       if (!sound->samples[ch] || !out[ch] || sound->bleed[ch] <= 0)
         continue;
 
+      if (!rate && sound->pitch > 0 && sound->pitch != 1)
+        framerate = pckt_sample_rate (sound->samples[ch], 0) / sound->pitch;
+
       /* Read NFRAMES frames from sample into BUFFER.  */
       nread = pckt_sample_read (sound->samples[ch], buffer, nframes,
-                                sound->progress[ch], rate);
+                                sound->progress[ch], framerate);
       sound->progress[ch] += nread;
 
       if (choke && rate == 0)

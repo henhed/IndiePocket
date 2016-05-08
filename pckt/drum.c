@@ -4,6 +4,7 @@
 #include "sample.h"
 
 #define MAX_NUM_SAMPLES 16
+#define TWELFTH_ROOT_OF_TWO 1.05946309435929526
 
 struct PcktDrumImpl
 {
@@ -16,6 +17,7 @@ struct PcktDrumImpl
 struct PcktDrumMetaImpl
 {
   char *name;
+  float tuning;
 };
 
 PcktDrum *
@@ -106,6 +108,9 @@ pckt_drum_hit (const PcktDrum *drum, PcktSound *sound, float force)
 
   sound->impact = force;
 
+  if (drum->meta && drum->meta->tuning != 0)
+    sound->pitch = powf (TWELFTH_ROOT_OF_TWO, drum->meta->tuning);
+
   return true;
 }
 
@@ -150,4 +155,19 @@ const char *
 pckt_drum_meta_get_name (const PcktDrumMeta *meta)
 {
   return (meta && meta->name) ? meta->name : NULL;
+}
+
+float
+pckt_drum_meta_get_tuning (const PcktDrumMeta *meta)
+{
+  return meta ? meta->tuning : 0;
+}
+
+bool
+pckt_drum_meta_set_tuning (PcktDrumMeta *meta, float tuning)
+{
+  if (!meta)
+    return false;
+  meta->tuning = tuning;
+  return true;
 }
