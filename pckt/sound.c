@@ -16,6 +16,7 @@
    along with IndiePocket.  If not, see <http://www.gnu.org/licenses/>. */
 
 #include <string.h>
+#include <math.h>
 #include "sound.h"
 
 struct PcktSoundPoolImpl {
@@ -142,15 +143,24 @@ pckt_sound_clear (PcktSound *sound)
       sound->samples[ch] = NULL;
       sound->bleed[ch] = 0;
       sound->progress[ch] = 0;
+      sound->tail[ch] = 0;
     }
   sound->impact = 0;
   sound->pitch = 0;
+  sound->smoothness = 0;
+  sound->stiffness = 0;
   sound->variance = 0;
   sound->choke = false;
   sound->source = NULL;
 
   return true;
 }
+
+#define CHOKE_DECAY_RATE(amp, rate) \
+  ((amp) / (PCKT_CHOKE_TIME * (rate)))
+
+#define STIFFNESS_DECAY_RATE(rate) \
+  (1.f - powf (0.5f, 1.f / ((float) (rate) * PCKT_STIFF_HL)))
 
 int32_t
 pckt_sound_process (PcktSound *sound, float **out, size_t nframes,
@@ -159,18 +169,29 @@ pckt_sound_process (PcktSound *sound, float **out, size_t nframes,
   if (!sound || !out || !nframes)
     return 0;
 
-  float frame, buffer[nframes];
+  float frame, buffer[nframes], decay = 0, expdecay = 0;
   float k, sum[PCKT_NCHANNELS], sum2[PCKT_NCHANNELS]; /* For variance.  */
   size_t nread, nreadmax = 0;
-  /* Calculate decay rate if sound is choked and a frame rate was given.  */
+  uint32_t framerate = rate, samplerate;
   bool choke = sound->choke && (sound->impact > 0);
-  float decay = ((choke && rate > 0)
-                 ? (sound->impact / (PCKT_CHOKE_TIME * rate))
-                 : 0);
+  bool shift = (sound->pitch > 0) && (sound->pitch != 1);
+  bool smoothen = (sound->smoothness > 0) && (sound->smoothness <= 1);
+  bool stiffen = (sound->stiffness > 0) && (sound->stiffness <= 1);
 
-  uint32_t framerate = rate;
-  if (rate && sound->pitch > 0 && sound->pitch != 1)
-    framerate = rate / sound->pitch;
+  if (rate)
+    {
+      /* Calculate new frame rate if sound is pitched.  */
+      if (shift)
+        framerate = rate / sound->pitch;
+
+      /* Calculate linear decay rate if sound is choked.  */
+      if (choke)
+        decay = CHOKE_DECAY_RATE (sound->impact, rate);
+
+      /* Calculate exponential decay rate if sound is stiffened.  */
+      if (stiffen)
+        expdecay = 1.f - (STIFFNESS_DECAY_RATE (rate) * sound->stiffness);
+    }
 
   PcktChannel ch;
   uint32_t i;
@@ -182,19 +203,27 @@ pckt_sound_process (PcktSound *sound, float **out, size_t nframes,
       if (!sound->samples[ch] || !out[ch] || sound->bleed[ch] <= 0)
         continue;
 
-      if (!rate && sound->pitch > 0 && sound->pitch != 1)
-        framerate = pckt_sample_rate (sound->samples[ch], 0) / sound->pitch;
+      if (!rate)
+        {
+          /* Calculate frame- and decay rates using the samples native rate if
+             no specific rate was requested.   */
+          samplerate = pckt_sample_rate (sound->samples[ch], 0);
+          if (!samplerate)
+            continue;
+
+          if (shift)
+            framerate = samplerate / sound->pitch;
+          if (choke)
+            decay = CHOKE_DECAY_RATE (sound->impact, samplerate);
+          if (stiffen)
+            expdecay = 1.f - (STIFFNESS_DECAY_RATE (samplerate)
+                              * sound->stiffness);
+        }
 
       /* Read NFRAMES frames from sample into BUFFER.  */
       nread = pckt_sample_read (sound->samples[ch], buffer, nframes,
                                 sound->progress[ch], framerate);
       sound->progress[ch] += nread;
-
-      if (choke && rate == 0)
-        /* Claculate per-sample decay rate if sound is choked and no frame rate
-           was given.  */
-        decay = sound->impact / (PCKT_CHOKE_TIME
-                                 * pckt_sample_rate (sound->samples[ch], 0));
 
       /* Write buffered frames to output.  */
       k = buffer[0] * sound->bleed[ch];
@@ -204,7 +233,16 @@ pckt_sound_process (PcktSound *sound, float **out, size_t nframes,
             sound->bleed[ch] = 0;
           else if (decay > 0)
             sound->bleed[ch] -= decay;
+          else if (expdecay > 0)
+            sound->bleed[ch] *= expdecay;
+
           frame = buffer[i] * sound->bleed[ch];
+          if (smoothen)
+            {
+              frame *= 1.f - sound->smoothness;
+              frame += sound->tail[ch] * sound->smoothness;
+            }
+          sound->tail[ch] = frame;
           out[ch][i] += frame;
           sum[ch] += frame - k;
           sum2[ch] += (frame - k) * (frame - k);

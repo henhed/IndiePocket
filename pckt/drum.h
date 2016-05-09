@@ -38,6 +38,8 @@ extern void pckt_drum_meta_free (PcktDrumMeta *);
 extern const char *pckt_drum_meta_get_name (const PcktDrumMeta *);
 extern float pckt_drum_meta_get_tuning (const PcktDrumMeta *);
 extern bool pckt_drum_meta_set_tuning (PcktDrumMeta *, float);
+extern float pckt_drum_meta_get_dampening (const PcktDrumMeta *);
+extern bool pckt_drum_meta_set_dampening (PcktDrumMeta *, float);
 
 __END_DECLS
 

@@ -22,6 +22,7 @@
 #include "sample.h"
 
 #define PCKT_CHOKE_TIME .5f
+#define PCKT_STIFF_HL .02f
 
 __BEGIN_DECLS
 
@@ -39,8 +40,11 @@ typedef struct
   PcktSample *samples[PCKT_NCHANNELS];
   float bleed[PCKT_NCHANNELS];
   size_t progress[PCKT_NCHANNELS];
+  float tail[PCKT_NCHANNELS];
   float impact;
   float pitch;
+  float smoothness;
+  float stiffness;
   float variance;
   bool choke;
   const void *source;

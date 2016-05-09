@@ -35,6 +35,7 @@ struct PcktDrumMetaImpl
 {
   char *name;
   float tuning;
+  float dampening;
 };
 
 PcktDrum *
@@ -111,10 +112,10 @@ pckt_drum_hit (const PcktDrum *drum, PcktSound *sound, float force)
   for (ch = PCKT_CH0; ch < PCKT_NCHANNELS; ++ch)
     {
       nsamples = drum->nsamples[ch];
-      if (nsamples == 0) // no samples for channel
+      if (nsamples == 0) /* No samples for channel.  */
         continue;
       bleed = drum->bleed[ch] * force;
-      if (bleed <= 0) // only muted channels
+      if (bleed <= 0) /* Channel is muted.  */
         continue;
       sound->bleed[ch] = bleed;
       sample = roundf (force * (nsamples - 1));
@@ -127,6 +128,13 @@ pckt_drum_hit (const PcktDrum *drum, PcktSound *sound, float force)
 
   if (drum->meta && drum->meta->tuning != 0)
     sound->pitch = powf (TWELFTH_ROOT_OF_TWO, drum->meta->tuning);
+
+  if (drum->meta && drum->meta->dampening > 0 && drum->meta->dampening <= 1)
+    {
+      sound->smoothness = drum->meta->dampening;
+      /* Stiffness is arbitrarily squared to scale nicely with smoothness.  */
+      sound->stiffness = drum->meta->dampening * drum->meta->dampening;
+    }
 
   return true;
 }
@@ -186,5 +194,20 @@ pckt_drum_meta_set_tuning (PcktDrumMeta *meta, float tuning)
   if (!meta)
     return false;
   meta->tuning = tuning;
+  return true;
+}
+
+float
+pckt_drum_meta_get_dampening (const PcktDrumMeta *meta)
+{
+  return meta ? meta->dampening : 0;
+}
+
+bool
+pckt_drum_meta_set_dampening (PcktDrumMeta *meta, float dampening)
+{
+  if (!meta || dampening < 0 || dampening > 1)
+    return false;
+  meta->dampening = dampening;
   return true;
 }
