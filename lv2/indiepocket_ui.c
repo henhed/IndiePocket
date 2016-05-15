@@ -29,14 +29,30 @@
 /* IndiePocket headers.  */
 #include "indiepocket_io.h"
 
-typedef struct {
+typedef struct
+{
   LV2_Atom_Forge forge;
   LV2_URID_Map *map;
   IPIOURIs uris;
   LV2UI_Write_Function write;
   LV2UI_Controller controller;
+  GtkWidget *vbox;
   GtkWidget *button;
+  GtkWidget *drum_hbox;
+  GtkWidget *tune_vbox;
+  GtkWidget *name_vbox;
+  GtkWidget *damp_vbox;
 } IndiePocketUI;
+
+typedef struct
+{
+  LV2_URID uri;
+  int8_t drum;
+} DrumProperty;
+
+#define DRUM_PROPERTY_KEY "drum_property"
+
+static void clear_drum_controls (IndiePocketUI *ui);
 
 /* Load kit button click callback.  */
 static void
@@ -58,6 +74,25 @@ on_file_selected (GtkWidget *widget, void *handle)
   g_free (filename);
 }
 
+/* Drum control change callback.  */
+static void
+on_drum_prop_changed (GtkRange *range, void *handle)
+{
+  IndiePocketUI *ui = (IndiePocketUI *) handle;
+  float value = (float) gtk_range_get_value (range);
+  DrumProperty *prop = g_object_get_data (G_OBJECT (range), DRUM_PROPERTY_KEY);
+  if (!prop)
+    return;
+
+  uint8_t forgebuf[IPIO_FORGE_BUFFER_SIZE];
+  lv2_atom_forge_set_buffer (&ui->forge, forgebuf, IPIO_FORGE_BUFFER_SIZE);
+  LV2_Atom *msg = ipio_write_drum_property (&ui->forge, &ui->uris, prop->drum,
+                                            prop->uri, value);
+
+  ui->write (ui->controller, IPIO_CONTROL, lv2_atom_total_size (msg),
+             ui->uris.atom_eventTransfer, msg);
+}
+
 /* Set up UI.  */
 static LV2UI_Handle
 instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
@@ -76,7 +111,12 @@ instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
   ui->map = NULL;
   ui->write = write_function;
   ui->controller = controller;
+  ui->vbox = NULL;
   ui->button = NULL;
+  ui->drum_hbox = NULL;
+  ui->tune_vbox = NULL;
+  ui->name_vbox = NULL;
+  ui->damp_vbox = NULL;
 
   *widget = NULL;
 
@@ -96,11 +136,31 @@ instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
   ipio_map_uris (&ui->uris, ui->map);
   lv2_atom_forge_init (&ui->forge, ui->map);
 
+  ui->vbox = gtk_vbox_new (FALSE, 0);
+
   ui->button = gtk_file_chooser_button_new (NULL,
                                             GTK_FILE_CHOOSER_ACTION_OPEN);
   g_signal_connect (ui->button, "file-set", G_CALLBACK (on_file_selected), ui);
+  gtk_box_pack_start (GTK_BOX (ui->vbox), GTK_WIDGET (ui->button),
+                      FALSE, TRUE, 5);
 
-  *widget = ui->button;
+  ui->drum_hbox = gtk_hbox_new (FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (ui->vbox), GTK_WIDGET (ui->drum_hbox),
+                      TRUE, TRUE, 0);
+
+  ui->tune_vbox = gtk_vbox_new (TRUE, 0);
+  gtk_box_pack_start (GTK_BOX (ui->drum_hbox), GTK_WIDGET (ui->tune_vbox),
+                      TRUE, TRUE, 5);
+
+  ui->name_vbox = gtk_vbox_new (TRUE, 0);
+  gtk_box_pack_start (GTK_BOX (ui->drum_hbox), GTK_WIDGET (ui->name_vbox),
+                      FALSE, TRUE, 5);
+
+  ui->damp_vbox = gtk_vbox_new (TRUE, 0);
+  gtk_box_pack_start (GTK_BOX (ui->drum_hbox), GTK_WIDGET (ui->damp_vbox),
+                      TRUE, TRUE, 5);
+
+  *widget = ui->vbox;
 
   return ui;
 }
@@ -110,8 +170,125 @@ static void
 cleanup (LV2UI_Handle handle)
 {
   IndiePocketUI *ui = (IndiePocketUI *) handle;
+  clear_drum_controls (ui);
   gtk_widget_destroy (ui->button);
+  gtk_widget_destroy (ui->tune_vbox);
+  gtk_widget_destroy (ui->name_vbox);
+  gtk_widget_destroy (ui->damp_vbox);
+  gtk_widget_destroy (ui->drum_hbox);
+  gtk_widget_destroy (ui->vbox);
   free (ui);
+}
+
+/* Kit file notification callback.  */
+static void
+on_kit_loaded (IndiePocketUI *ui, const LV2_Atom_Object *obj)
+{
+  const LV2_Atom *kit_path = ipio_atom_get_kit_file (&ui->uris, obj);
+  if (!kit_path)
+    {
+      fprintf (stderr, "Unknown message sent to UI.\n");
+      return;
+    }
+
+  const char *filename = (const char *) LV2_ATOM_BODY_CONST (kit_path);
+  if (strlen (filename))
+    {
+      GFile *kit_file = g_file_new_for_path (filename);
+      gtk_file_chooser_select_file (GTK_FILE_CHOOSER (ui->button), kit_file,
+                                    NULL);
+      g_object_unref (kit_file);
+      clear_drum_controls (ui);
+    }
+  else
+    gtk_file_chooser_unselect_all (GTK_FILE_CHOOSER (ui->button));
+
+  gtk_widget_set_sensitive (ui->button, TRUE);
+}
+
+/* Remove all drum control widgets.  */
+static void
+clear_drum_controls (IndiePocketUI *ui)
+{
+  GList *children, *it;
+  GtkContainer *containers[3] = {
+    GTK_CONTAINER (ui->tune_vbox),
+    GTK_CONTAINER (ui->name_vbox),
+    GTK_CONTAINER (ui->damp_vbox)
+  };
+  for (uint8_t i = 0; i < 3; ++i)
+    {
+      children = gtk_container_get_children (containers[i]);
+      for (it = children; it != NULL; it = g_list_next (it))
+        gtk_widget_destroy (GTK_WIDGET (it->data));
+      g_list_free (children);
+    }
+}
+
+/* Create widget to control given drum property.  */
+static GtkWidget *
+create_drum_control (IndiePocketUI *ui, DrumProperty *prop,
+                     float value, float from, float to, float step)
+{
+  GtkWidget *scale = gtk_hscale_new_with_range (from, to, step);
+  DrumProperty *prop_data = malloc (sizeof (DrumProperty));
+  memcpy (prop_data, prop, sizeof (DrumProperty));
+
+  gtk_scale_set_value_pos (GTK_SCALE (scale), GTK_POS_RIGHT);
+  gtk_scale_add_mark (GTK_SCALE (scale), 0, GTK_POS_TOP, NULL);
+  gtk_range_set_value (GTK_RANGE (scale), value);
+  g_signal_connect (scale, "value-changed",
+                    G_CALLBACK (on_drum_prop_changed), ui);
+  g_object_set_data_full (G_OBJECT (scale),
+                          DRUM_PROPERTY_KEY, prop_data,
+                          (GDestroyNotify) free);
+  return scale;
+}
+
+/* Drum meta notification callback.  */
+static void
+on_drum_loaded (IndiePocketUI *ui, const LV2_Atom_Object *obj)
+{
+  const LV2_Atom *index_atom = NULL, *name_atom = NULL;
+  lv2_atom_object_get (obj, ui->uris.pckt_index, &index_atom,
+                       ui->uris.doap_name, &name_atom, 0);
+  if (!index_atom || (index_atom->type != ui->forge.Int)
+      || !name_atom || (name_atom->type != ui->forge.String))
+    {
+      fprintf (stderr, "Could not read index and name from Drum message\n");
+      return;
+    }
+
+  int8_t index = *(const int *) LV2_ATOM_BODY_CONST (index_atom);
+  const char *name = (const char *) LV2_ATOM_BODY_CONST (name_atom);
+
+  /* Create drum label.  */
+  GtkWidget *name_label;
+  if (strlen (name))
+    name_label = gtk_label_new (name);
+  else
+    {
+      char *anon = g_strdup_printf ("Drum #%d", index);
+      name_label = gtk_label_new (anon);
+      g_free (anon);
+    }
+  gtk_box_pack_start (GTK_BOX (ui->name_vbox), GTK_WIDGET (name_label),
+                      TRUE, TRUE, 0);
+  gtk_widget_show (name_label);
+
+  /* Create tuning control.  */
+  DrumProperty tune_prop = {ui->uris.pckt_tuning, index};
+  GtkWidget *tune_ctrl = create_drum_control (ui, &tune_prop, 0, -12, 12, 0.1);
+  gtk_box_pack_start (GTK_BOX (ui->tune_vbox), GTK_WIDGET (tune_ctrl),
+                      TRUE, TRUE, 0);
+  gtk_widget_show (tune_ctrl);
+
+  /* Create dampening control.  */
+  DrumProperty damp_prop = {ui->uris.pckt_dampening, index};
+  GtkWidget *damp_ctrl = create_drum_control (ui, &damp_prop, 0, 0, 1, 0.01);
+  gtk_box_pack_start (GTK_BOX (ui->damp_vbox), GTK_WIDGET (damp_ctrl),
+                      TRUE, TRUE, 0);
+  gtk_widget_show (damp_ctrl);
 }
 
 /* Port event listener.  */
@@ -137,25 +314,10 @@ port_event (LV2UI_Handle handle, uint32_t port_index, uint32_t buffer_size,
     }
 
   const LV2_Atom_Object *obj = (const LV2_Atom_Object *) atom;
-  const LV2_Atom *kit_path = ipio_atom_get_kit_file (&ui->uris, obj);
-  if (!kit_path)
-    {
-      fprintf (stderr, "Unknown message sent to UI.\n");
-      return;
-    }
-
-  const char *filename = (const char *) LV2_ATOM_BODY_CONST (kit_path);
-  if (strlen (filename))
-    {
-      GFile *kit_file = g_file_new_for_path (filename);
-      gtk_file_chooser_select_file (GTK_FILE_CHOOSER (ui->button), kit_file,
-                                    NULL);
-      g_object_unref (kit_file);
-    }
-  else
-    gtk_file_chooser_unselect_all (GTK_FILE_CHOOSER (ui->button));
-
-  gtk_widget_set_sensitive (ui->button, TRUE);
+  if (obj->body.otype == ui->uris.patch_Set)
+    on_kit_loaded (ui, obj);
+  else if (obj->body.otype == ui->uris.pckt_Drum)
+    on_drum_loaded (ui, obj);
 }
 
 /* Return any extension data supported by this UI.  */

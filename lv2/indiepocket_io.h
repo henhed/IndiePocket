@@ -29,6 +29,7 @@
 #define IPCKT_URI "http://www.henhed.se/lv2/indiepocket"
 #define IPCKT_URI_PREFIX IPCKT_URI "#"
 #define IPCKT_UI_URI IPCKT_URI_PREFIX "ui"
+#define IPCKT_URI_DOAP "http://usefulinc.com/ns/doap#"
 
 typedef enum {
   IPIO_AUDIO_OUT_KICK_1 = 0,
@@ -57,12 +58,18 @@ typedef struct {
   LV2_URID atom_Path;
   LV2_URID atom_URID;
   LV2_URID atom_eventTransfer;
+  LV2_URID doap_name;
   LV2_URID midi_Event;
   LV2_URID patch_Set;
   LV2_URID patch_property;
+  LV2_URID patch_subject;
   LV2_URID patch_value;
+  LV2_URID pckt_Drum;
   LV2_URID pckt_Kit;
+  LV2_URID pckt_dampening;
   LV2_URID pckt_freeKit;
+  LV2_URID pckt_index;
+  LV2_URID pckt_tuning;
 } IPIOURIs;
 
 #define IPIO_IS_AUDIO_OUT_PORT(port) \
@@ -77,12 +84,18 @@ ipio_map_uris (IPIOURIs *uris, LV2_URID_Map *map)
   uris->atom_Path = map->map (map->handle, LV2_ATOM__Path);
   uris->atom_URID = map->map (map->handle, LV2_ATOM__URID);
   uris->atom_eventTransfer = map->map (map->handle, LV2_ATOM__eventTransfer);
+  uris->doap_name = map->map (map->handle, IPCKT_URI_DOAP "name");
   uris->midi_Event = map->map (map->handle, LV2_MIDI__MidiEvent);
   uris->patch_Set = map->map (map->handle, LV2_PATCH__Set);
   uris->patch_property = map->map (map->handle, LV2_PATCH__property);
+  uris->patch_subject = map->map (map->handle, LV2_PATCH__subject);
   uris->patch_value = map->map (map->handle, LV2_PATCH__value);
+  uris->pckt_Drum = map->map (map->handle, IPCKT_URI_PREFIX "Drum");
   uris->pckt_Kit = map->map (map->handle, IPCKT_URI_PREFIX "Kit");
+  uris->pckt_dampening = map->map (map->handle, IPCKT_URI_PREFIX "dampening");
   uris->pckt_freeKit = map->map (map->handle, IPCKT_URI_PREFIX "freeKit");
+  uris->pckt_index = map->map (map->handle, IPCKT_URI_PREFIX "index");
+  uris->pckt_tuning = map->map (map->handle, IPCKT_URI_PREFIX "tuning");
 }
 
 static inline bool
@@ -91,17 +104,30 @@ ipio_atom_type_is_object (const LV2_Atom_Forge* forge, uint32_t type)
   return type == forge->Blank || type == forge->Resource;
 }
 
+static inline LV2_Atom_Forge_Ref
+ipio_forge_object (LV2_Atom_Forge *forge, LV2_Atom_Forge_Frame *frame,
+                   LV2_URID type)
+{
+  return lv2_atom_forge_blank (forge, frame, 1, type);
+}
+
+static inline LV2_Atom_Forge_Ref
+ipio_forge_key (LV2_Atom_Forge *forge, LV2_URID key)
+{
+  return lv2_atom_forge_property_head (forge, key, 0);
+}
+
 static inline LV2_Atom *
 ipio_forge_kit_file_atom (LV2_Atom_Forge *forge, const IPIOURIs *uris,
                           const char *path)
 {
   LV2_Atom_Forge_Frame frame;
-  LV2_Atom *msg = (LV2_Atom *) lv2_atom_forge_blank (forge, &frame, 1,
-                                                     uris->patch_Set);
+  LV2_Atom *msg = (LV2_Atom *) ipio_forge_object (forge, &frame,
+                                                  uris->patch_Set);
 
-  lv2_atom_forge_property_head (forge, uris->patch_property, 0);
+  ipio_forge_key (forge, uris->patch_property);
   lv2_atom_forge_urid (forge, uris->pckt_Kit);
-  lv2_atom_forge_property_head (forge, uris->patch_value, 0);
+  ipio_forge_key (forge, uris->patch_value);
   lv2_atom_forge_path (forge, path, strlen (path));
 
   lv2_atom_forge_pop (forge, &frame);
@@ -136,7 +162,7 @@ ipio_atom_get_kit_file (const IPIOURIs *uris, const LV2_Atom_Object *obj)
       return NULL;
     }
 
-  const LV2_Atom* file_path = NULL;
+  const LV2_Atom *file_path = NULL;
   lv2_atom_object_get (obj, uris->patch_value, &file_path, 0);
   if (!file_path)
     {
@@ -150,6 +176,26 @@ ipio_atom_get_kit_file (const IPIOURIs *uris, const LV2_Atom_Object *obj)
     }
 
   return file_path;
+}
+
+static inline LV2_Atom *
+ipio_write_drum_property (LV2_Atom_Forge *forge, const IPIOURIs *uris,
+                          int8_t drum, LV2_URID property, float value)
+{
+  LV2_Atom_Forge_Frame frame;
+  LV2_Atom *msg = (LV2_Atom *) ipio_forge_object (forge, &frame,
+                                                  uris->patch_Set);
+
+  ipio_forge_key (forge, uris->patch_subject);
+  lv2_atom_forge_int (forge, drum);
+  ipio_forge_key (forge, uris->patch_property);
+  lv2_atom_forge_urid (forge, property);
+  ipio_forge_key (forge, uris->patch_value);
+  lv2_atom_forge_float (forge, value);
+
+  lv2_atom_forge_pop (forge, &frame);
+
+  return msg;
 }
 
 #endif /* ! INDIEPOCKET_IO_H */
