@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import re
+from distutils.version import LooseVersion
 
 APPNAME = 'IndiePocket.lv2'
 VERSION = '0.1.0'
@@ -21,7 +22,6 @@ def require_pkg(cnf, pkg, version=None, alias=None):
     if alias:
         args['uselib_store'] = alias
     cnf.check_cfg(**args)
-    cnf.check_cfg(modversion=pkg)
 
 def configure(cnf):
     cnf.load('compiler_c')
@@ -32,6 +32,11 @@ def configure(cnf):
         uselib_store='M'
     )
     require_pkg(cnf, 'lv2', '1.8.0', 'LV2')
+    if LooseVersion(cnf.check_cfg(modversion='lv2')) >= LooseVersion('1.10.0'):
+        cnf.define('HAVE_LV2_ATOM_OBJECT', 1)
+    else:
+        cnf.define('HAVE_LV2_ATOM_OBJECT', 0)
+
     require_pkg(cnf, 'serd-0', '0.18.2', 'SERD')
     require_pkg(cnf, 'sord-0', '0.12.0', 'SORD')
     require_pkg(cnf, 'sndfile', '1.0.0', 'SNDFILE')
@@ -58,7 +63,7 @@ def build(bld):
         source='pckt/kit_factory.c',
         target='pckt_kitfct',
         use='SERD SORD',
-        defines=['_BSD_SOURCE'] # for realpath
+        defines=['_DEFAULT_SOURCE', '_BSD_SOURCE'] # for realpath
     )
 
     plugin = bld.shlib(

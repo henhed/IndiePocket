@@ -101,20 +101,32 @@ ipio_map_uris (IPIOURIs *uris, LV2_URID_Map *map)
 static inline bool
 ipio_atom_type_is_object (const LV2_Atom_Forge* forge, uint32_t type)
 {
+#if defined HAVE_LV2_ATOM_OBJECT && !HAVE_LV2_ATOM_OBJECT
   return type == forge->Blank || type == forge->Resource;
+#else
+  return lv2_atom_forge_is_object_type (forge, type);
+#endif
 }
 
 static inline LV2_Atom_Forge_Ref
 ipio_forge_object (LV2_Atom_Forge *forge, LV2_Atom_Forge_Frame *frame,
                    LV2_URID type)
 {
+#if defined HAVE_LV2_ATOM_OBJECT && !HAVE_LV2_ATOM_OBJECT
   return lv2_atom_forge_blank (forge, frame, 1, type);
+#else
+  return lv2_atom_forge_object (forge, frame, 0, type);
+#endif
 }
 
 static inline LV2_Atom_Forge_Ref
 ipio_forge_key (LV2_Atom_Forge *forge, LV2_URID key)
 {
+#if defined HAVE_LV2_ATOM_OBJECT && !HAVE_LV2_ATOM_OBJECT
   return lv2_atom_forge_property_head (forge, key, 0);
+#else
+  return lv2_atom_forge_key (forge, key);
+#endif
 }
 
 static inline LV2_Atom *
