@@ -311,9 +311,13 @@ work (LV2_Handle instance, LV2_Worker_Respond_Function respond,
       IPcktKitMsg msg = {
         {sizeof (PcktKit *) + sizeof (char *), plugin->uris.pckt_Kit},
         kit,
-        (char *) malloc (strlen (filename) + 1)
+        NULL
       };
-      strcpy (msg.kit_filename, filename);
+      if (kit)
+        {
+          msg.kit_filename = (char *) malloc (strlen (filename) + 1);
+          strcpy (msg.kit_filename, filename);
+        }
       respond (handle, sizeof (IPcktKitMsg), &msg);
     }
 
