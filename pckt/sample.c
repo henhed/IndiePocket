@@ -128,6 +128,28 @@ pckt_sample_write (PcktSample *sample, const float *frames, size_t nframes)
 }
 
 bool
+pckt_sample_resize (PcktSample *sample, size_t nframes)
+{
+  if (!sample)
+    return false;
+  else if (nframes == sample->nframes)
+    return true;
+
+  sample->realsize = sizeof (float) * nframes;
+  sample->frames = realloc (sample->frames, sample->realsize);
+  if (!sample->frames && nframes > 0)
+    {
+      sample->realsize = 0;
+      sample->nframes = 0;
+      return false;
+    }
+  else if (nframes < sample->nframes)
+    sample->nframes = nframes;
+
+  return true;
+}
+
+bool
 pckt_resample (PcktSample *sample, uint32_t rate)
 {
   if (!sample || !rate)

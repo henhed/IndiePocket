@@ -33,6 +33,7 @@ extern uint32_t pckt_sample_rate (PcktSample *, uint32_t);
 extern size_t pckt_sample_read (const PcktSample *, float *, size_t, size_t,
                                 uint32_t);
 extern size_t pckt_sample_write (PcktSample *, const float *, size_t);
+extern bool pckt_sample_resize (PcktSample *, size_t);
 extern bool pckt_resample (PcktSample *, uint32_t);
 extern PcktSample *pckt_sample_factory (const char *);
 
