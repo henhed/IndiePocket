@@ -59,6 +59,7 @@ pckt_sample_factory (const char *filename)
   PcktSample *sample = pckt_sample_new ();
   pckt_sample_rate (sample, (uint32_t) info.samplerate);
   pckt_sample_resize (sample, (size_t) info.frames);
+  pckt_sample_set_interpolation (sample, PCKT_INTRPL_LINEAR);
   if (!load_sample (sample, file, &info))
     {
       pckt_sample_free (sample);

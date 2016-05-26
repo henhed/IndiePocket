@@ -26,10 +26,16 @@
 __BEGIN_DECLS
 
 typedef struct PcktSampleImpl PcktSample;
+typedef enum {
+  PCKT_INTRPL_NONE = 0,
+  PCKT_INTRPL_CONSTANT,
+  PCKT_INTRPL_LINEAR
+} PcktInterpolation;
 
 extern PcktSample *pckt_sample_new ();
 extern void pckt_sample_free (PcktSample *);
 extern uint32_t pckt_sample_rate (PcktSample *, uint32_t);
+extern bool pckt_sample_set_interpolation (PcktSample *, PcktInterpolation);
 extern size_t pckt_sample_read (const PcktSample *, float *, size_t, size_t,
                                 uint32_t);
 extern size_t pckt_sample_write (PcktSample *, const float *, size_t);

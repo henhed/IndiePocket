@@ -20,12 +20,17 @@
 #include <math.h>
 #include "sample.h"
 
+typedef size_t (*PcktInterpolator) (const float *, size_t,
+                                    float *, size_t,
+                                    float);
+
 struct PcktSampleImpl
 {
   uint32_t rate;
   float *frames;
   size_t nframes;
   size_t realsize;
+  PcktInterpolator interpolator;
 };
 
 PcktSample *
@@ -38,6 +43,7 @@ pckt_sample_new ()
       sample->frames = NULL;
       sample->nframes = 0;
       sample->realsize = 0;
+      sample->interpolator = NULL;
     }
   return sample;
 }
@@ -62,6 +68,72 @@ pckt_sample_rate (PcktSample *sample, uint32_t rate)
   return sample->rate;
 }
 
+static inline size_t
+interpolate_constant (const float *src, size_t src_size,
+                      float *dest, size_t dest_size,
+                      float ratio)
+{
+  uint32_t i, frame;
+  for (i = 0; i < dest_size; ++i)
+    {
+      frame = (i * ratio);
+      if (frame >= src_size)
+        break;
+      dest[i] = src[frame];
+    }
+  return i;
+}
+
+static inline size_t
+interpolate_linear (const float *src, size_t src_size,
+                    float *dest, size_t dest_size,
+                    float ratio)
+{
+  uint32_t i, f1, f2;
+  float pos, w1, w2;
+  for (i = 0; i < dest_size; ++i)
+    {
+      pos = (float) i * ratio;
+      f1 = floorf (pos); /* Lower source frame position.  */
+      f2 = ceilf (pos); /* Upper source frame position.  */
+      if (f1 >= src_size)
+        break;
+      else if (f1 == f2 || f2 >= src_size)
+        {
+          dest[i] = src[f1];
+          continue;
+        }
+      w1 = (float) f2 - pos; /* Lower source frame weight.  */
+      w2 = pos - (float) f1; /* Upper source frame weight.  */
+      dest[i] = (src[f1] * w1) + (src[f2] * w2);
+    }
+  return i;
+}
+
+bool
+pckt_sample_set_interpolation (PcktSample *sample, PcktInterpolation intrpl)
+{
+  if (!sample)
+    return false;
+
+  switch (intrpl)
+    {
+    case PCKT_INTRPL_NONE:
+      sample->interpolator = NULL;
+      break;
+    case PCKT_INTRPL_CONSTANT:
+      sample->interpolator = interpolate_constant;
+      break;
+    case PCKT_INTRPL_LINEAR:
+      sample->interpolator = interpolate_linear;
+      break;
+    default:
+      return false;
+    }
+
+  return true;
+}
+
 size_t
 pckt_sample_read (const PcktSample *sample, float *frames, size_t nframes,
                   size_t offset, uint32_t rate)
@@ -69,7 +141,7 @@ pckt_sample_read (const PcktSample *sample, float *frames, size_t nframes,
   if (!sample || !frames || !nframes)
     return 0;
 
-  if (rate == 0 || rate == sample->rate)
+  if ((rate == 0) || (rate == sample->rate) || !sample->interpolator)
     {
       if (offset >= sample->nframes)
         return 0;
@@ -78,19 +150,16 @@ pckt_sample_read (const PcktSample *sample, float *frames, size_t nframes,
 
       memcpy (frames, sample->frames + offset, sizeof (float) * nframes);
     }
-  else // on-the-fly resampling using nearest-neighbor interpolation
+  else
     {
       float ratio = (float) sample->rate / rate;
-      size_t realoffset = ratio * offset;
-      uint32_t virtframe, realframe;
-      for (virtframe = 0; virtframe < nframes; ++virtframe)
-        {
-          realframe = (virtframe * ratio) + realoffset;
-          if (realframe >= sample->nframes)
-            break;
-          frames[virtframe] = sample->frames[realframe];
-        }
-      nframes = virtframe;
+      offset *= ratio;
+      if (ratio <= 0 || offset >= sample->nframes)
+        return 0;
+
+      nframes = sample->interpolator (sample->frames + offset,
+                                      sample->nframes - offset,
+                                      frames, nframes, ratio);
     }
 
   return nframes;
