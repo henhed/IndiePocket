@@ -232,24 +232,8 @@ pckt_resample (PcktSample *sample, uint32_t rate)
   if (!frames)
     return false;
 
-  uint32_t i, f1, f2;
-  float pos, w1, w2;
-  for (i = 0; i < nframes; ++i)
-    {
-      pos = ((float) i / nframes) * sample->nframes;
-      f1 = floorf (pos); // lower source frame position
-      f2 = ceilf (pos); // upper source frame position
-      if (f1 == f2 || f2 >= sample->nframes)
-        {
-          frames[i] = sample->frames[f1];
-          continue;
-        }
-      w1 = (float) f2 - pos; // lower source frame weight
-      w2 = pos - (float) f1; // upper source frame weight
-      frames[i]
-        = sample->frames[f1] * w1
-        + sample->frames[f2] * w2;
-    }
+  memset (frames, 0, nframes * sizeof (float));
+  pckt_sample_read (sample, frames, nframes, 0, rate);
 
   free (sample->frames);
   sample->frames = frames;
