@@ -38,8 +38,28 @@ __BEGIN_DECLS
 
 typedef enum {
   PCKTE_SUCCESS = 0,
-  PCKTE_UNKNOWN
+  PCKTE_GENERAL,
+  PCKTE_NOMEM,
+  PCKTE_INVAL
 } PcktStatus;
+
+static inline const char *
+pckt_strerror (PcktStatus status)
+{
+  switch (status)
+    {
+    case PCKTE_SUCCESS:
+      return "Success";
+    case PCKTE_GENERAL:
+      return "General error";
+    case PCKTE_NOMEM:
+      return "Out of memory";
+    case PCKTE_INVAL:
+      return "Invalid argument";
+    default:
+      return "Unknown error";
+    }
+}
 
 __END_DECLS
 

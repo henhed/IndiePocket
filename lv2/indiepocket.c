@@ -303,8 +303,19 @@ work (LV2_Handle instance, LV2_Worker_Respond_Function respond,
         return LV2_WORKER_ERR_UNKNOWN;
 
       const char *filename = (const char *) LV2_ATOM_BODY_CONST (kit_path);
-      lv2_log_note (&plugin->logger, "Loading %s\n", filename);
-      PcktKit *kit = pckt_kit_factory (filename);
+      PcktKit *kit = NULL;
+      PcktStatus err;
+      PcktKitFactory *factory = pckt_kit_factory_new (filename, &err);
+      if (factory)
+        {
+          lv2_log_note (&plugin->logger, "Loading %s\n", filename);
+          kit = pckt_kit_factory_load (factory);
+          pckt_kit_factory_free (factory);
+        }
+      else
+        lv2_log_error (&plugin->logger, "pckt_kit_factory_new: %s\n",
+                       pckt_strerror (err));
+
       if (!kit)
         lv2_log_error (&plugin->logger, "Failed to load %s\n", filename);
 
