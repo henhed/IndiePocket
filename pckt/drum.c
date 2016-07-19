@@ -15,20 +15,27 @@
    You should have received a copy of the GNU General Public License
    along with IndiePocket.  If not, see <http://www.gnu.org/licenses/>. */
 
+#include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include "drum.h"
 #include "sample.h"
 
-#define MAX_NUM_SAMPLES 16
+#define MAX_NUM_SAMPLES 32
 #define TWELFTH_ROOT_OF_TWO 1.05946309435929526
+
+typedef struct {
+  PcktSample *sample;
+  char *name;
+} PcktDrumSample;
 
 struct PcktDrumImpl
 {
   const PcktDrumMeta *meta;
-  PcktSample *samples[PCKT_NCHANNELS][MAX_NUM_SAMPLES];
+  PcktDrumSample samples[PCKT_NCHANNELS][MAX_NUM_SAMPLES];
   size_t nsamples[PCKT_NCHANNELS];
   float bleed[PCKT_NCHANNELS];
+  float overlap;
 };
 
 struct PcktDrumMetaImpl
@@ -52,18 +59,19 @@ pckt_drum_free (PcktDrum *drum)
 {
   if (!drum)
     return;
-  PcktSample *sample;
-  PcktChannel ch;
-  uint32_t i;
-  for (ch = PCKT_CH0; ch < PCKT_NCHANNELS; ++ch)
+
+  for (PcktChannel ch = PCKT_CH0; ch < PCKT_NCHANNELS; ++ch)
     {
-      for (i = 0; i < MAX_NUM_SAMPLES; ++i)
+      for (uint8_t i = 0; i < drum->nsamples[ch]; ++i)
         {
-          sample = drum->samples[ch][i];
-          if (sample)
-            pckt_sample_free (sample);
+          if (drum->samples[ch][i].sample)
+            pckt_sample_free (drum->samples[ch][i].sample);
+
+          if (drum->samples[ch][i].name)
+            free (drum->samples[ch][i].name);
         }
     }
+
   free (drum);
 }
 
@@ -86,13 +94,99 @@ pckt_drum_set_meta (PcktDrum *drum, const PcktDrumMeta *meta)
 }
 
 bool
-pckt_drum_add_sample (PcktDrum *drum, PcktSample *sample, PcktChannel ch)
+pckt_drum_set_sample_overlap (PcktDrum *drum, float overlap)
+{
+  if (!drum || overlap < 0)
+    return false;
+  drum->overlap = overlap;
+  return true;
+}
+
+static int
+drum_sample_cmp (const void *lhs, const void *rhs)
+{
+  PcktDrumSample *a = (PcktDrumSample *) lhs;
+  PcktDrumSample *b = (PcktDrumSample *) rhs;
+  if (!a->name)
+    return b->name ? -1 : 0;
+  else if (!b->name)
+    return 1;
+  else
+    return strcmp (a->name, b->name);
+}
+
+bool
+pckt_drum_add_sample (PcktDrum *drum, PcktSample *sample, PcktChannel ch,
+                      const char *name)
 {
   if (!drum || !sample || ch < PCKT_CH0 || ch >= PCKT_NCHANNELS
       || drum->nsamples[ch] >= MAX_NUM_SAMPLES)
     return false;
-  drum->samples[ch][drum->nsamples[ch]++] = sample;
+
+  PcktDrumSample *ds = &drum->samples[ch][drum->nsamples[ch]++];
+  ds->sample = sample;
+  if (!name)
+    ds->name = NULL;
+  else
+    {
+      ds->name = malloc (strlen (name) + 1);
+      strcpy (ds->name, name);
+    }
+
+  qsort (drum->samples[ch], drum->nsamples[ch], sizeof (PcktDrumSample),
+         drum_sample_cmp);
+
   return true;
+}
+
+static inline PcktSample *
+get_sample_for_hit (const PcktDrum *drum, PcktChannel ch, float force,
+                    float random)
+{
+  size_t nsamples = drum->nsamples[ch];
+  if (nsamples == 0)
+    return NULL;
+  else if (nsamples == 1)
+    return drum->samples[ch][0].sample;
+
+  uint8_t index;
+  float probability = 0;
+  float scale = 1.f + drum->overlap;
+  float weights[nsamples];
+  float weight_sum = 0;
+  float width = 1.f / nsamples;
+
+  /* Gather sample weights based on range and proximity to given FORCE.  */
+  for (index = 0; index < nsamples; ++index)
+    {
+      float center = (index * width) + (width / 2);
+      float range = (width / 2) * scale;
+      float weight = (range - fabsf (center - force)) / range;
+      if (weight > 0)
+        {
+          weight_sum += weight;
+          weights[index] = weight;
+        }
+      else
+        weights[index] = 0;
+    }
+
+  /* Test RANDOM against each weighed samples cumulative probability.  */
+  for (index = 0; index < nsamples; ++index)
+    {
+      if (weights[index] <= 0)
+        continue;
+
+      probability += weights[index] / weight_sum;
+
+      if (random <= probability)
+        break;
+    }
+
+  if (index >= nsamples)
+    index = nsamples - 1;
+
+  return drum->samples[ch][index].sample;
 }
 
 bool
@@ -106,22 +200,15 @@ pckt_drum_hit (const PcktDrum *drum, PcktSound *sound, float force)
     return true;
 
   PcktChannel ch;
-  uint32_t sample;
-  size_t nsamples;
   float bleed;
+  float random = (float) rand () / RAND_MAX;
   for (ch = PCKT_CH0; ch < PCKT_NCHANNELS; ++ch)
     {
-      nsamples = drum->nsamples[ch];
-      if (nsamples == 0) /* No samples for channel.  */
-        continue;
       bleed = drum->bleed[ch] * force;
       if (bleed <= 0) /* Channel is muted.  */
         continue;
       sound->bleed[ch] = bleed;
-      sample = roundf (force * (nsamples - 1));
-      if (sample >= nsamples)
-        sample = nsamples - 1;
-      sound->samples[ch] = drum->samples[ch][sample];
+      sound->samples[ch] = get_sample_for_hit (drum, ch, force, random);
     }
 
   sound->impact = force;

@@ -34,13 +34,11 @@
 #define URI_PCKT__DrumHit (const uint8_t *) URI_PCKT "DrumHit"
 #define URI_PCKT__Kit (const uint8_t *) URI_PCKT "Kit"
 #define URI_PCKT__Mic (const uint8_t *) URI_PCKT "Mic"
-#define URI_PCKT__Sample (const uint8_t *) URI_PCKT "Sample"
 #define URI_PCKT__Sound (const uint8_t *) URI_PCKT "Sound"
 #define URI_PCKT__bleed (const uint8_t *) URI_PCKT "bleed"
 #define URI_PCKT__channel (const uint8_t *) URI_PCKT "channel"
 #define URI_PCKT__choke (const uint8_t *) URI_PCKT "choke"
 #define URI_PCKT__drum (const uint8_t *) URI_PCKT "drum"
-#define URI_PCKT__file (const uint8_t *) URI_PCKT "file"
 #define URI_PCKT__kit (const uint8_t *) URI_PCKT "kit"
 #define URI_PCKT__key (const uint8_t *) URI_PCKT "key"
 #define URI_PCKT__mic (const uint8_t *) URI_PCKT "mic"
@@ -67,13 +65,11 @@ struct PcktKitFactoryImpl {
     SordNode *class_drum_hit;
     SordNode *class_kit;
     SordNode *class_mic;
-    SordNode *class_sample;
     SordNode *class_sound;
     SordNode *prop_bleed;
     SordNode *prop_channel;
     SordNode *prop_choke;
     SordNode *prop_drum;
-    SordNode *prop_file;
     SordNode *prop_kit;
     SordNode *prop_key;
     SordNode *prop_mic;
@@ -173,13 +169,11 @@ init_uris (PcktKitFactory *factory)
   factory->uris.class_drum_hit = sord_new_uri (world, URI_PCKT__DrumHit);
   factory->uris.class_kit = sord_new_uri (world, URI_PCKT__Kit);
   factory->uris.class_mic = sord_new_uri (world, URI_PCKT__Mic);
-  factory->uris.class_sample = sord_new_uri (world, URI_PCKT__Sample);
   factory->uris.class_sound = sord_new_uri (world, URI_PCKT__Sound);
   factory->uris.prop_bleed = sord_new_uri (world, URI_PCKT__bleed);
   factory->uris.prop_channel = sord_new_uri (world, URI_PCKT__channel);
   factory->uris.prop_choke = sord_new_uri (world, URI_PCKT__choke);
   factory->uris.prop_drum = sord_new_uri (world, URI_PCKT__drum);
-  factory->uris.prop_file = sord_new_uri (world, URI_PCKT__file);
   factory->uris.prop_kit = sord_new_uri (world, URI_PCKT__kit);
   factory->uris.prop_key = sord_new_uri (world, URI_PCKT__key);
   factory->uris.prop_mic = sord_new_uri (world, URI_PCKT__mic);
@@ -343,19 +337,12 @@ load_drum_samples (const PcktKitFactory *factory, PcktDrum *drum,
   for (; !sord_iter_end (sample_it); sord_iter_next (sample_it))
     {
       const SordNode *sample_node = sord_iter_get_node (sample_it, SORD_OBJECT);
-      SordIter *file_it = sord_search (factory->model, sample_node,
-                                       factory->uris.prop_file, NULL, NULL);
-      if (!file_it)
-        continue;
-
-      for (; !sord_iter_end (file_it); sord_iter_next (file_it))
+      PcktSample *sample = load_sample (factory, sample_node);
+      if (sample)
         {
-          const SordNode *file_node = sord_iter_get_node (file_it, SORD_OBJECT);
-          PcktSample *sample = load_sample (factory, file_node);
-          if (sample)
-            pckt_drum_add_sample (drum, sample, channel);
+          const char *name = (const char *) sord_node_get_string (sample_node);
+          pckt_drum_add_sample (drum, sample, channel, name);
         }
-      sord_iter_free (file_it);
     }
   sord_iter_free (sample_it);
 }
