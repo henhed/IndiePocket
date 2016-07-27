@@ -74,14 +74,14 @@ def build(bld):
     plugin.env.cshlib_PATTERN = lib_pattern
 
     ui = bld.shlib(
-        source='lv2/indiepocket_ui.c',
+        source='lv2/indiepocket_ui.c pckt/gtk2/dial.c',
         target='%s/indiepocket_ui' % APPNAME,
-        use='GTK2 LV2'
+        use='GTK2 LV2 M'
     )
     ui.env.cshlib_PATTERN = lib_pattern
 
     bld(
         rule='cp ${SRC} ${TGT}',
-        source='lv2/manifest.ttl lv2/indiepocket.ttl',
+        source='lv2/manifest.ttl lv2/indiepocket.ttl lv2/ui.xml lv2/logo.png',
         target='%s/' % APPNAME
     )

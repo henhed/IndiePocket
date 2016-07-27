@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<interface>
+  <object class="GtkEventBox" id="root">
+    <property name="visible">True</property>
+    <property name="border-width">10</property>
+    <child>
+      <object class="GtkVBox" id="layout">
+        <property name="visible">True</property>
+        <property name="homogeneous">False</property>
+        <property name="spacing">10</property>
+        <child>
+          <object class="GtkEventBox" id="header">
+            <property name="visible">True</property>
+            <child>
+              <object class="GtkImage" id="logo">
+                <property name="visible">True</property>
+                <property name="file">logo.png</property>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="position">0</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkNotebook" id="notebook">
+            <property name="visible">True</property>
+            <child>
+              <object class="GtkHBox" id="drum-tab">
+                <property name="visible">True</property>
+                <child>
+                  <object class="GtkVBox" id="drum-name-box">
+                    <property name="visible">True</property>
+                    <child>
+                      <placeholder />
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="expand">True</property>
+                    <property name="fill">False</property>
+                    <property name="position">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkVBox" id="drum-tune-box">
+                    <property name="visible">True</property>
+                    <child>
+                      <placeholder />
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="expand">True</property>
+                    <property name="fill">False</property>
+                    <property name="position">1</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkVBox" id="drum-damp-box">
+                    <property name="visible">True</property>
+                    <child>
+                      <placeholder />
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="expand">True</property>
+                    <property name="fill">False</property>
+                    <property name="position">2</property>
+                  </packing>
+                </child>
+              </object>
+            </child>
+            <child type="tab">
+              <object class="GtkLabel" id="drum-tab-label">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">Drums</property>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">True</property>
+            <property name="fill">True</property>
+            <property name="position">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkHButtonBox" id="button-box">
+            <property name="visible">True</property>
+            <property name="layout-style">end</property>
+            <child>
+              <object class="GtkFileChooserButton" id="file-chooser-button">
+                <property name="visible">True</property>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="position">2</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkStatusbar" id="statusbar">
+            <property name="visible">True</property>
+            <property name="has-resize-grip">False</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="position">3</property>
+          </packing>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>
+

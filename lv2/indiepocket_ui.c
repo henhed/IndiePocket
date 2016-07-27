@@ -17,6 +17,7 @@
 
 /* Standard headers.  */
 #include <stdlib.h>
+#include <unistd.h>
 
 /* LV2 headers.  */
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
@@ -28,6 +29,7 @@
 
 /* IndiePocket headers.  */
 #include "indiepocket_io.h"
+#include "../pckt/gtk2/dial.h"
 
 typedef struct
 {
@@ -36,12 +38,13 @@ typedef struct
   IPIOURIs uris;
   LV2UI_Write_Function write;
   LV2UI_Controller controller;
-  GtkWidget *vbox;
+  GtkWidget *root;
+  GtkWidget *notebook;
+  GtkWidget *name_box;
+  GtkWidget *tune_box;
+  GtkWidget *damp_box;
   GtkWidget *button;
-  GtkWidget *drum_hbox;
-  GtkWidget *tune_vbox;
-  GtkWidget *name_vbox;
-  GtkWidget *damp_vbox;
+  GtkWidget *statusbar;
 } IndiePocketUI;
 
 typedef struct
@@ -49,6 +52,10 @@ typedef struct
   LV2_URID uri;
   int8_t drum;
 } DrumProperty;
+
+#ifndef PATH_MAX
+# define PATH_MAX 4096
+#endif
 
 #define DRUM_PROPERTY_KEY "drum_property"
 
@@ -102,7 +109,6 @@ instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 {
   (void) descriptor;
   (void) plugin_uri;
-  (void) bundle_path;
 
   IndiePocketUI *ui = (IndiePocketUI *) malloc (sizeof (IndiePocketUI));
   if (!ui)
@@ -111,12 +117,12 @@ instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
   ui->map = NULL;
   ui->write = write_function;
   ui->controller = controller;
-  ui->vbox = NULL;
+  ui->root = NULL;
+  ui->notebook = NULL;
+  ui->name_box = NULL;
+  ui->tune_box = NULL;
+  ui->damp_box = NULL;
   ui->button = NULL;
-  ui->drum_hbox = NULL;
-  ui->tune_vbox = NULL;
-  ui->name_vbox = NULL;
-  ui->damp_vbox = NULL;
 
   *widget = NULL;
 
@@ -136,31 +142,54 @@ instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
   ipio_map_uris (&ui->uris, ui->map);
   lv2_atom_forge_init (&ui->forge, ui->map);
 
-  ui->vbox = gtk_vbox_new (FALSE, 0);
+  char cwdbuf[PATH_MAX + 1];
+  char *cwd = getcwd (cwdbuf, PATH_MAX + 1);
+  if (chdir (bundle_path))
+    fprintf (stderr, "indiepocket_ui.c: Could not cd to %s\n", bundle_path);
 
-  ui->button = gtk_file_chooser_button_new (NULL,
-                                            GTK_FILE_CHOOSER_ACTION_OPEN);
+  GtkBuilder *builder = gtk_builder_new ();
+  GError *error = NULL;
+  if (!gtk_builder_add_from_file (builder, "ui.xml", &error))
+    {
+      fprintf (stderr, "indiepocket_ui.c: %s\n", error->message);
+      g_error_free (error);
+      free (ui);
+      return NULL;
+    }
+
+  if (cwd)
+    chdir (cwd);
+
+  void *widget_map[7][2] = {
+    {&ui->root, "root"},
+    {&ui->notebook, "notebook"},
+    {&ui->name_box, "drum-name-box"},
+    {&ui->tune_box, "drum-tune-box"},
+    {&ui->damp_box, "drum-damp-box"},
+    {&ui->statusbar, "statusbar"},
+    {&ui->button, "file-chooser-button"}
+  };
+
+  for (uint8_t i = 0; i < 7; ++i)
+    {
+      GtkWidget **ref = (GtkWidget **) widget_map[i][0];
+      const char *id = (const char *) widget_map[i][1];
+      *ref = GTK_WIDGET (gtk_builder_get_object (builder, id));
+      if (!*ref)
+        {
+          fprintf (stderr, "indiepocket_ui.c: Widget \"%s\" not found\n", id);
+          g_object_unref (G_OBJECT (builder));
+          free (ui);
+          return NULL;
+        }
+    }
+
+  g_object_ref (G_OBJECT (ui->root));
+  g_object_unref (G_OBJECT (builder));
+
   g_signal_connect (ui->button, "file-set", G_CALLBACK (on_file_selected), ui);
-  gtk_box_pack_start (GTK_BOX (ui->vbox), GTK_WIDGET (ui->button),
-                      FALSE, TRUE, 5);
 
-  ui->drum_hbox = gtk_hbox_new (FALSE, 0);
-  gtk_box_pack_start (GTK_BOX (ui->vbox), GTK_WIDGET (ui->drum_hbox),
-                      TRUE, TRUE, 0);
-
-  ui->tune_vbox = gtk_vbox_new (TRUE, 0);
-  gtk_box_pack_start (GTK_BOX (ui->drum_hbox), GTK_WIDGET (ui->tune_vbox),
-                      TRUE, TRUE, 5);
-
-  ui->name_vbox = gtk_vbox_new (TRUE, 0);
-  gtk_box_pack_start (GTK_BOX (ui->drum_hbox), GTK_WIDGET (ui->name_vbox),
-                      FALSE, TRUE, 5);
-
-  ui->damp_vbox = gtk_vbox_new (TRUE, 0);
-  gtk_box_pack_start (GTK_BOX (ui->drum_hbox), GTK_WIDGET (ui->damp_vbox),
-                      TRUE, TRUE, 5);
-
-  *widget = ui->vbox;
+  *widget = ui->root;
 
   return ui;
 }
@@ -171,12 +200,8 @@ cleanup (LV2UI_Handle handle)
 {
   IndiePocketUI *ui = (IndiePocketUI *) handle;
   clear_drum_controls (ui);
-  gtk_widget_destroy (ui->button);
-  gtk_widget_destroy (ui->tune_vbox);
-  gtk_widget_destroy (ui->name_vbox);
-  gtk_widget_destroy (ui->damp_vbox);
-  gtk_widget_destroy (ui->drum_hbox);
-  gtk_widget_destroy (ui->vbox);
+  g_object_unref (G_OBJECT (ui->root));
+  gtk_widget_destroy (ui->root);
   free (ui);
 }
 
@@ -212,9 +237,9 @@ clear_drum_controls (IndiePocketUI *ui)
 {
   GList *children, *it;
   GtkContainer *containers[3] = {
-    GTK_CONTAINER (ui->tune_vbox),
-    GTK_CONTAINER (ui->name_vbox),
-    GTK_CONTAINER (ui->damp_vbox)
+    GTK_CONTAINER (ui->tune_box),
+    GTK_CONTAINER (ui->name_box),
+    GTK_CONTAINER (ui->damp_box)
   };
   for (uint8_t i = 0; i < 3; ++i)
     {
@@ -230,19 +255,18 @@ static GtkWidget *
 create_drum_control (IndiePocketUI *ui, DrumProperty *prop,
                      float value, float from, float to, float step)
 {
-  GtkWidget *scale = gtk_hscale_new_with_range (from, to, step);
+  GtkAdjustment *adj = (GtkAdjustment *) gtk_adjustment_new (value, from, to,
+                                                             step, 0.5, 0);
+  GtkWidget *dial = pckt_gtk_dial_new_with_adjustment (adj);
   DrumProperty *prop_data = malloc (sizeof (DrumProperty));
   memcpy (prop_data, prop, sizeof (DrumProperty));
 
-  gtk_scale_set_value_pos (GTK_SCALE (scale), GTK_POS_RIGHT);
-  gtk_scale_add_mark (GTK_SCALE (scale), 0, GTK_POS_TOP, NULL);
-  gtk_range_set_value (GTK_RANGE (scale), value);
-  g_signal_connect (scale, "value-changed",
+  g_signal_connect (dial, "value-changed",
                     G_CALLBACK (on_drum_prop_changed), ui);
-  g_object_set_data_full (G_OBJECT (scale),
+  g_object_set_data_full (G_OBJECT (dial),
                           DRUM_PROPERTY_KEY, prop_data,
                           (GDestroyNotify) free);
-  return scale;
+  return dial;
 }
 
 /* Drum meta notification callback.  */
@@ -272,22 +296,23 @@ on_drum_loaded (IndiePocketUI *ui, const LV2_Atom_Object *obj)
       name_label = gtk_label_new (anon);
       g_free (anon);
     }
-  gtk_box_pack_start (GTK_BOX (ui->name_vbox), GTK_WIDGET (name_label),
-                      TRUE, TRUE, 0);
+  gtk_misc_set_alignment (GTK_MISC (name_label), 0.5, 0.5);
+  gtk_box_pack_start (GTK_BOX (ui->name_box), GTK_WIDGET (name_label),
+                      TRUE, TRUE, 10);
   gtk_widget_show (name_label);
 
   /* Create tuning control.  */
   DrumProperty tune_prop = {ui->uris.pckt_tuning, index};
   GtkWidget *tune_ctrl = create_drum_control (ui, &tune_prop, 0, -12, 12, 0.1);
-  gtk_box_pack_start (GTK_BOX (ui->tune_vbox), GTK_WIDGET (tune_ctrl),
-                      TRUE, TRUE, 0);
+  gtk_box_pack_start (GTK_BOX (ui->tune_box), GTK_WIDGET (tune_ctrl),
+                      TRUE, TRUE, 10);
   gtk_widget_show (tune_ctrl);
 
   /* Create dampening control.  */
   DrumProperty damp_prop = {ui->uris.pckt_dampening, index};
   GtkWidget *damp_ctrl = create_drum_control (ui, &damp_prop, 0, 0, 1, 0.01);
-  gtk_box_pack_start (GTK_BOX (ui->damp_vbox), GTK_WIDGET (damp_ctrl),
-                      TRUE, TRUE, 0);
+  gtk_box_pack_start (GTK_BOX (ui->damp_box), GTK_WIDGET (damp_ctrl),
+                      TRUE, TRUE, 10);
   gtk_widget_show (damp_ctrl);
 }
 
