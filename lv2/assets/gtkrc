@@ -1,0 +1,7 @@
+style "pckt-header"
+{
+  bg[NORMAL] = "#3465a4"
+}
+
+widget "*.indiepocket.*.GtkEventBox" style:highest "pckt-header"
+

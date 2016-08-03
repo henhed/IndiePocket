@@ -144,8 +144,9 @@ instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
 
   char cwdbuf[PATH_MAX + 1];
   char *cwd = getcwd (cwdbuf, PATH_MAX + 1);
-  if (chdir (bundle_path))
-    fprintf (stderr, "indiepocket_ui.c: Could not cd to %s\n", bundle_path);
+  if (chdir (bundle_path) || chdir ("assets"))
+    fprintf (stderr, "indiepocket_ui.c: Could not cd to %sassets\n",
+             bundle_path);
 
   GtkBuilder *builder = gtk_builder_new ();
   GError *error = NULL;
@@ -156,6 +157,8 @@ instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
       free (ui);
       return NULL;
     }
+
+  gtk_rc_parse ("gtkrc");
 
   if (cwd)
     chdir (cwd);
@@ -298,21 +301,21 @@ on_drum_loaded (IndiePocketUI *ui, const LV2_Atom_Object *obj)
     }
   gtk_misc_set_alignment (GTK_MISC (name_label), 0.5, 0.5);
   gtk_box_pack_start (GTK_BOX (ui->name_box), GTK_WIDGET (name_label),
-                      TRUE, TRUE, 10);
+                      TRUE, TRUE, 0);
   gtk_widget_show (name_label);
 
   /* Create tuning control.  */
   DrumProperty tune_prop = {ui->uris.pckt_tuning, index};
   GtkWidget *tune_ctrl = create_drum_control (ui, &tune_prop, 0, -12, 12, 0.1);
   gtk_box_pack_start (GTK_BOX (ui->tune_box), GTK_WIDGET (tune_ctrl),
-                      TRUE, TRUE, 10);
+                      TRUE, TRUE, 0);
   gtk_widget_show (tune_ctrl);
 
   /* Create dampening control.  */
   DrumProperty damp_prop = {ui->uris.pckt_dampening, index};
   GtkWidget *damp_ctrl = create_drum_control (ui, &damp_prop, 0, 0, 1, 0.01);
   gtk_box_pack_start (GTK_BOX (ui->damp_box), GTK_WIDGET (damp_ctrl),
-                      TRUE, TRUE, 10);
+                      TRUE, TRUE, 0);
   gtk_widget_show (damp_ctrl);
 }
 

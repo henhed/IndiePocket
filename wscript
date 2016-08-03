@@ -80,8 +80,17 @@ def build(bld):
     )
     ui.env.cshlib_PATTERN = lib_pattern
 
-    bld(
-        rule='cp ${SRC} ${TGT}',
-        source='lv2/manifest.ttl lv2/indiepocket.ttl lv2/ui.xml lv2/logo.png',
-        target='%s/' % APPNAME
-    )
+    plugin_files = [
+        'manifest.ttl',
+        'indiepocket.ttl',
+        'assets/ui.xml',
+        'assets/logo.png',
+        'assets/gtkrc'
+    ]
+    for pf in plugin_files:
+        bld(
+            features = 'subst',
+            is_copy = True,
+            source = 'lv2/%s' % pf,
+            target = '%s/%s' % (APPNAME, pf)
+        )

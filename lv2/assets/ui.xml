@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <interface>
   <object class="GtkEventBox" id="root">
+    <property name="name">indiepocket</property>
     <property name="visible">True</property>
-    <property name="border-width">10</property>
     <child>
       <object class="GtkVBox" id="layout">
         <property name="visible">True</property>
@@ -29,9 +29,11 @@
             <child>
               <object class="GtkHBox" id="drum-tab">
                 <property name="visible">True</property>
+                <property name="border-width">10</property>
                 <child>
                   <object class="GtkVBox" id="drum-name-box">
                     <property name="visible">True</property>
+                    <property name="spacing">10</property>
                     <child>
                       <placeholder />
                     </child>
@@ -45,6 +47,7 @@
                 <child>
                   <object class="GtkVBox" id="drum-tune-box">
                     <property name="visible">True</property>
+                    <property name="spacing">10</property>
                     <child>
                       <placeholder />
                     </child>
@@ -58,6 +61,7 @@
                 <child>
                   <object class="GtkVBox" id="drum-damp-box">
                     <property name="visible">True</property>
+                    <property name="spacing">10</property>
                     <child>
                       <placeholder />
                     </child>
