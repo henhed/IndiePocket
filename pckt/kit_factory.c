@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <libgen.h>
 #include <string.h>
+#include <glob.h>
 #include "kit.h"
 #include "drum.h"
 #include "sample.h"
@@ -302,27 +303,29 @@ get_sound_bleed (const PcktKitFactory *factory, const SordNode *sound_node)
   return bleed;
 }
 
-static inline PcktSample *
-load_sample (const PcktKitFactory *factory, const SordNode *file_node)
+static inline bool
+get_sample_pattern (const PcktKitFactory *factory, const SordNode *sample_node,
+                    glob_t *globbuf)
 {
-  if (sord_node_get_type (file_node) != SORD_LITERAL)
-    return NULL;
+  if (sord_node_get_type (sample_node) != SORD_LITERAL)
+    return false;
 
-  const char *filename = (const char *) sord_node_get_string (file_node);
+  const char *filename = (const char *) sord_node_get_string (sample_node);
   size_t flen = strlen (filename), dlen = strlen (factory->basedir);
-  char localized[flen + 1]; // + \0
-  char fullpath[dlen + 1 + flen + 1]; // + DIR_SEP + \0
+  char localized[flen + 1]; /* + \0 */
+  char fullpath[dlen + 1 + flen + 1]; /* + DIR_SEP + \0 */
   char *dirsep;
 
   if (flen == 0)
-    return NULL;
+    return false;
 
   strcpy (localized, filename);
   while ((dirsep = strchr (localized, BAD_DIR_SEP)))
     *dirsep = DIR_SEP;
 
   sprintf (fullpath, "%s%c%s", factory->basedir, DIR_SEP, localized);
-  return pckt_sample_factory (fullpath);
+
+  return glob (fullpath, 0, NULL, globbuf) ? false : true;
 }
 
 static inline void
@@ -337,13 +340,28 @@ load_drum_samples (const PcktKitFactory *factory, PcktDrum *drum,
   for (; !sord_iter_end (sample_it); sord_iter_next (sample_it))
     {
       const SordNode *sample_node = sord_iter_get_node (sample_it, SORD_OBJECT);
-      PcktSample *sample = load_sample (factory, sample_node);
-      if (sample)
+      glob_t globbuf;
+      if (!get_sample_pattern (factory, sample_node, &globbuf))
+        continue;
+
+      for (char **path = globbuf.gl_pathv; *path != NULL; ++path)
         {
-          const char *name = (const char *) sord_node_get_string (sample_node);
+          char *name = *path;
+          PcktSample *sample = pckt_sample_factory (name);
+          if (!sample)
+            continue;
+
+          /* Strip base dir from name.  */
+          if ((strstr (name, factory->basedir) == name)
+              && (strlen (name) > (strlen (factory->basedir) + 1)))
+            name += strlen (factory->basedir) + 1;
+
+          /* Add sample to drum.  */
           if (!pckt_drum_add_sample (drum, sample, channel, name))
             pckt_sample_free (sample);
         }
+
+      globfree (&globbuf);
     }
   sord_iter_free (sample_it);
 }
