@@ -341,7 +341,8 @@ load_drum_samples (const PcktKitFactory *factory, PcktDrum *drum,
       if (sample)
         {
           const char *name = (const char *) sord_node_get_string (sample_node);
-          pckt_drum_add_sample (drum, sample, channel, name);
+          if (!pckt_drum_add_sample (drum, sample, channel, name))
+            pckt_sample_free (sample);
         }
     }
   sord_iter_free (sample_it);
