@@ -43,6 +43,7 @@ struct PcktDrumMetaImpl
   char *name;
   float tuning;
   float dampening;
+  float intensity;
 };
 
 PcktDrum *
@@ -199,6 +200,19 @@ pckt_drum_hit (const PcktDrum *drum, PcktSound *sound, float force)
   if (force <= 0)
     return true;
 
+  if (drum->meta && drum->meta->intensity != 0)
+    {
+      /* Raise FORCE to the power of EXP, where INF > EXP > 1 for negative
+         intensity values and 1 > EXP > 0 for positive intensity values.
+         The .8 factor of the exponent is arbitrarily chosen as more extreme
+         values doesn't sound useful.  */
+      float exp = 1.f - fabs (drum->meta->intensity * 0.8);
+      if (drum->meta->intensity < 0)
+        exp = 1.f / exp;
+
+      force = powf (force, exp);
+    }
+
   PcktChannel ch;
   float bleed;
   float random = (float) rand () / RAND_MAX;
@@ -296,5 +310,20 @@ pckt_drum_meta_set_dampening (PcktDrumMeta *meta, float dampening)
   if (!meta || dampening < 0 || dampening > 1)
     return false;
   meta->dampening = dampening;
+  return true;
+}
+
+float
+pckt_drum_meta_get_intensity (const PcktDrumMeta *meta)
+{
+  return meta ? meta->intensity : 0;
+}
+
+bool
+pckt_drum_meta_set_intensity (PcktDrumMeta *meta, float intensity)
+{
+  if (!meta || intensity < -1 || intensity > 1)
+    return false;
+  meta->intensity = intensity;
   return true;
 }
