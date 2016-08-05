@@ -174,6 +174,8 @@ handle_event (IndiePocket *plugin, LV2_Atom_Event *event)
             pckt_drum_meta_set_tuning (meta, value);
           else if (meta && (key == plugin->uris.pckt_dampening))
             pckt_drum_meta_set_dampening (meta, value);
+          else if (meta && (key == plugin->uris.pckt_expression))
+            pckt_drum_meta_set_expression (meta, value);
         }
       else
         lv2_log_error (&plugin->logger,

@@ -43,7 +43,7 @@ struct PcktDrumMetaImpl
   char *name;
   float tuning;
   float dampening;
-  float intensity;
+  float expression;
 };
 
 PcktDrum *
@@ -200,14 +200,14 @@ pckt_drum_hit (const PcktDrum *drum, PcktSound *sound, float force)
   if (force <= 0)
     return true;
 
-  if (drum->meta && drum->meta->intensity != 0)
+  if (drum->meta && drum->meta->expression != 0)
     {
       /* Raise FORCE to the power of EXP, where INF > EXP > 1 for negative
-         intensity values and 1 > EXP > 0 for positive intensity values.
+         expression values and 1 > EXP > 0 for positive expression values.
          The .8 factor of the exponent is arbitrarily chosen as more extreme
          values doesn't sound useful.  */
-      float exp = 1.f - fabs (drum->meta->intensity * 0.8);
-      if (drum->meta->intensity < 0)
+      float exp = 1.f - fabs (drum->meta->expression * 0.8);
+      if (drum->meta->expression < 0)
         exp = 1.f / exp;
 
       force = powf (force, exp);
@@ -314,16 +314,16 @@ pckt_drum_meta_set_dampening (PcktDrumMeta *meta, float dampening)
 }
 
 float
-pckt_drum_meta_get_intensity (const PcktDrumMeta *meta)
+pckt_drum_meta_get_expression (const PcktDrumMeta *meta)
 {
-  return meta ? meta->intensity : 0;
+  return meta ? meta->expression : 0;
 }
 
 bool
-pckt_drum_meta_set_intensity (PcktDrumMeta *meta, float intensity)
+pckt_drum_meta_set_expression (PcktDrumMeta *meta, float expression)
 {
-  if (!meta || intensity < -1 || intensity > 1)
+  if (!meta || expression < -1 || expression > 1)
     return false;
-  meta->intensity = intensity;
+  meta->expression = expression;
   return true;
 }

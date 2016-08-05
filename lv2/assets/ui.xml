@@ -72,6 +72,20 @@
                     <property name="position">2</property>
                   </packing>
                 </child>
+                <child>
+                  <object class="GtkVBox" id="drum-expr-box">
+                    <property name="visible">True</property>
+                    <property name="spacing">10</property>
+                    <child>
+                      <placeholder />
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="expand">True</property>
+                    <property name="fill">False</property>
+                    <property name="position">3</property>
+                  </packing>
+                </child>
               </object>
             </child>
             <child type="tab">

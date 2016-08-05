@@ -43,6 +43,7 @@ typedef struct
   GtkWidget *name_box;
   GtkWidget *tune_box;
   GtkWidget *damp_box;
+  GtkWidget *expr_box;
   GtkWidget *button;
   GtkWidget *statusbar;
 } IndiePocketUI;
@@ -122,6 +123,7 @@ instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
   ui->name_box = NULL;
   ui->tune_box = NULL;
   ui->damp_box = NULL;
+  ui->expr_box = NULL;
   ui->button = NULL;
 
   *widget = NULL;
@@ -163,17 +165,18 @@ instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
   if (cwd)
     chdir (cwd);
 
-  void *widget_map[7][2] = {
+  void *widget_map[8][2] = {
     {&ui->root, "root"},
     {&ui->notebook, "notebook"},
     {&ui->name_box, "drum-name-box"},
     {&ui->tune_box, "drum-tune-box"},
     {&ui->damp_box, "drum-damp-box"},
+    {&ui->expr_box, "drum-expr-box"},
     {&ui->statusbar, "statusbar"},
     {&ui->button, "file-chooser-button"}
   };
 
-  for (uint8_t i = 0; i < 7; ++i)
+  for (uint8_t i = 0; i < 8; ++i)
     {
       GtkWidget **ref = (GtkWidget **) widget_map[i][0];
       const char *id = (const char *) widget_map[i][1];
@@ -239,12 +242,13 @@ static void
 clear_drum_controls (IndiePocketUI *ui)
 {
   GList *children, *it;
-  GtkContainer *containers[3] = {
+  GtkContainer *containers[4] = {
     GTK_CONTAINER (ui->tune_box),
     GTK_CONTAINER (ui->name_box),
-    GTK_CONTAINER (ui->damp_box)
+    GTK_CONTAINER (ui->damp_box),
+    GTK_CONTAINER (ui->expr_box)
   };
-  for (uint8_t i = 0; i < 3; ++i)
+  for (uint8_t i = 0; i < 4; ++i)
     {
       children = gtk_container_get_children (containers[i]);
       for (it = children; it != NULL; it = g_list_next (it))
@@ -317,6 +321,13 @@ on_drum_loaded (IndiePocketUI *ui, const LV2_Atom_Object *obj)
   gtk_box_pack_start (GTK_BOX (ui->damp_box), GTK_WIDGET (damp_ctrl),
                       TRUE, TRUE, 0);
   gtk_widget_show (damp_ctrl);
+
+  /* Create expression control.  */
+  DrumProperty expr_prop = {ui->uris.pckt_expression, index};
+  GtkWidget *expr_ctrl = create_drum_control (ui, &expr_prop, 0, -1, 1, 0.01);
+  gtk_box_pack_start (GTK_BOX (ui->expr_box), GTK_WIDGET (expr_ctrl),
+                      TRUE, TRUE, 0);
+  gtk_widget_show (expr_ctrl);
 }
 
 /* Port event listener.  */
