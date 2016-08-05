@@ -16,6 +16,7 @@
    along with IndiePocket.  If not, see <http://www.gnu.org/licenses/>. */
 
 #include <sndfile.h>
+#include <string.h>
 #include "sample.h"
 
 static bool
@@ -34,11 +35,11 @@ load_sample (PcktSample *sample, SNDFILE *file, const SF_INFO *info)
   sf_count_t nread;
   while ((nread = sf_readf_float (file, interleaved, nframes)) > 0)
     {
+      memset (mono, 0, nread * sizeof (float));
       for (f = 0; f < nread; ++f)
         {
-          mono[f] = interleaved[f * info->channels];
-          for (c = 1; c < info->channels; ++c)
-            mono[f] += interleaved[f + c];
+          for (c = 0; c < info->channels; ++c)
+            mono[f] += interleaved[(f * info->channels) + c];
           mono[f] /= info->channels;
         }
       pckt_sample_write (sample, mono, nread);
