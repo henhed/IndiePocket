@@ -39,7 +39,7 @@ typedef struct PcktGtkDialClassImpl PcktGtkDialClass;
 struct PcktGtkDialImpl
 {
   GtkRange range;
-  double default_value;
+  gdouble default_value;
 };
 
 struct PcktGtkDialClassImpl
@@ -50,6 +50,8 @@ struct PcktGtkDialClassImpl
 extern GType pckt_gtk_dial_get_type ();
 extern GtkWidget *pckt_gtk_dial_new ();
 extern GtkWidget *pckt_gtk_dial_new_with_adjustment (GtkAdjustment *);
+extern gdouble pckt_gtk_dial_get_default_value (const PcktGtkDial *);
+extern void pckt_gtk_dial_set_default_value (PcktGtkDial *, gdouble);
 
 __END_DECLS
 

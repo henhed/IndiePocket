@@ -25,6 +25,11 @@
 
 #define PCKT_GTK_DIAL_DEFAULT_SIZE 32
 
+#define P_DEFAULT_VALUE_ID 1
+#define P_DEFAULT_VALUE_NAME "default-value"
+#define P_DEFAULT_VALUE_LABEL "Default Value"
+#define P_DEFAULT_VALUE_DESC "The value assigned when the dial is reset"
+
 static void pckt_gtk_dial_size_request (GtkWidget *, GtkRequisition *);
 static gboolean pckt_gtk_dial_expose (GtkWidget *, GdkEventExpose *);
 static gboolean pckt_gtk_dial_button_press (GtkWidget *, GdkEventButton *);
@@ -32,6 +37,10 @@ static gboolean pckt_gtk_dial_button_release (GtkWidget *, GdkEventButton *);
 static gboolean pckt_gtk_dial_motion_notify (GtkWidget *, GdkEventMotion *);
 static gboolean pckt_gtk_dial_enter_notify (GtkWidget *, GdkEventCrossing *);
 static gboolean pckt_gtk_dial_leave_notify (GtkWidget *, GdkEventCrossing *);
+static void pckt_gtk_dial_get_property (GObject *, guint, GValue *,
+                                        GParamSpec *);
+static void pckt_gtk_dial_set_property (GObject *, guint, const GValue *,
+                                        GParamSpec *);
 
 G_DEFINE_TYPE (PcktGtkDial, pckt_gtk_dial, GTK_TYPE_RANGE)
 
@@ -39,6 +48,8 @@ static void
 pckt_gtk_dial_class_init (PcktGtkDialClass *klass)
 {
   GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
+  GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
+
   widget_class->expose_event = pckt_gtk_dial_expose;
   widget_class->size_request = pckt_gtk_dial_size_request;
   widget_class->button_press_event = pckt_gtk_dial_button_press;
@@ -46,6 +57,19 @@ pckt_gtk_dial_class_init (PcktGtkDialClass *klass)
   widget_class->motion_notify_event = pckt_gtk_dial_motion_notify;
   widget_class->enter_notify_event = pckt_gtk_dial_enter_notify;
   widget_class->leave_notify_event = pckt_gtk_dial_leave_notify;
+
+  gobject_class->get_property = pckt_gtk_dial_get_property;
+  gobject_class->set_property = pckt_gtk_dial_set_property;
+
+  g_object_class_install_property (gobject_class,
+                                   P_DEFAULT_VALUE_ID,
+                                   g_param_spec_double (P_DEFAULT_VALUE_NAME,
+                                                        P_DEFAULT_VALUE_LABEL,
+                                                        P_DEFAULT_VALUE_DESC,
+                                                        -G_MAXDOUBLE,
+                                                        G_MAXDOUBLE,
+                                                        0,
+                                                        G_PARAM_READWRITE));
 }
 
 static void
@@ -73,6 +97,20 @@ pckt_gtk_dial_value_changed (gpointer object)
   return FALSE;
 }
 
+gdouble
+pckt_gtk_dial_get_default_value (const PcktGtkDial *dial)
+{
+  g_return_val_if_fail (PCKT_GTK_IS_DIAL (dial), 0);
+  return dial->default_value;
+}
+
+void
+pckt_gtk_dial_set_default_value (PcktGtkDial *dial, gdouble default_value)
+{
+  g_return_if_fail (PCKT_GTK_IS_DIAL (dial));
+  dial->default_value = default_value;
+}
+
 GtkWidget *
 pckt_gtk_dial_new_with_adjustment (GtkAdjustment *adjustment)
 {
@@ -80,7 +118,8 @@ pckt_gtk_dial_new_with_adjustment (GtkAdjustment *adjustment)
 
   if (widget)
     {
-      PCKT_GTK_DIAL (widget)->default_value = adjustment->value;
+      pckt_gtk_dial_set_default_value (PCKT_GTK_DIAL (widget),
+                                       adjustment->value);
       gtk_range_set_adjustment (GTK_RANGE (widget), adjustment);
       g_signal_connect (GTK_OBJECT (widget),
                         "value-changed",
@@ -115,6 +154,9 @@ pckt_gtk_dial_expose (GtkWidget *widget, GdkEventExpose *event)
   g_return_val_if_fail (event->count <= 0, FALSE);
 
   GtkAdjustment *adj = gtk_range_get_adjustment (GTK_RANGE (widget));
+  if (adj->upper == adj->lower)
+    return FALSE;
+
   cairo_t *cr = gdk_cairo_create (GDK_DRAWABLE (widget->window));
 
   double wx = widget->allocation.x;
@@ -293,4 +335,26 @@ pckt_gtk_dial_leave_notify (GtkWidget *widget, GdkEventCrossing *event)
       gtk_widget_queue_draw (widget);
     }
   return TRUE;
+}
+
+static void
+pckt_gtk_dial_get_property (GObject *object, guint prop_id, GValue *value,
+                            GParamSpec *pspec)
+{
+  PcktGtkDial *dial = PCKT_GTK_DIAL (object);
+  if (prop_id == P_DEFAULT_VALUE_ID)
+    g_value_set_double (value, pckt_gtk_dial_get_default_value (dial));
+  else
+    G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+}
+
+static void
+pckt_gtk_dial_set_property (GObject *object, guint prop_id, const GValue *value,
+                            GParamSpec *pspec)
+{
+  PcktGtkDial *dial = PCKT_GTK_DIAL (object);
+  if (prop_id == P_DEFAULT_VALUE_ID)
+    pckt_gtk_dial_set_default_value (dial, g_value_get_double (value));
+  else
+    G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
