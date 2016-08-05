@@ -88,6 +88,10 @@ pckt_soundpool_get (PcktSoundPool *pool, const void *source)
           sound = pool->sounds + i;
           break; /* Steal silent sounds first.  */
         }
+      else if (pool->sounds[i].variance < 0)
+        /* Variance is set to -1 when the sound is cleared. This prevents it
+           from being stolen before it has had a chance to start playing.  */
+        continue;
       else if (!sound || (sound->source != source
                           && pool->sounds[i].source == source))
         {
@@ -149,7 +153,7 @@ pckt_sound_clear (PcktSound *sound)
   sound->pitch = 0;
   sound->smoothness = 0;
   sound->stiffness = 0;
-  sound->variance = 0;
+  sound->variance = -1;
   sound->choke = false;
   sound->source = NULL;
 
