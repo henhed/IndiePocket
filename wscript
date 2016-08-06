@@ -83,7 +83,8 @@ def build(bld):
     plugin_files = [
         'manifest.ttl',
         'indiepocket.ttl',
-        'assets/ui.xml',
+        'assets/layout.ui',
+        'assets/drum.ui',
         'assets/logo.png',
         'assets/gtkrc'
     ]

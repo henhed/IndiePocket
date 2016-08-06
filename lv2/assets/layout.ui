@@ -27,63 +27,60 @@
           <object class="GtkNotebook" id="notebook">
             <property name="visible">True</property>
             <child>
-              <object class="GtkHBox" id="drum-tab">
+              <object class="GtkVBox" id="drum-tab">
                 <property name="visible">True</property>
+                <property name="homogeneous">False</property>
                 <property name="border-width">10</property>
                 <child>
-                  <object class="GtkVBox" id="drum-name-box">
+                  <object class="GtkHBox" id="drum-controls-header">
                     <property name="visible">True</property>
-                    <property name="spacing">10</property>
+                    <property name="homogeneous">True</property>
                     <child>
-                      <placeholder />
+                      <object class="GtkLabel" id="drum-controls-header-tune">
+                        <property name="visible">True</property>
+                        <property name="label" translatable="yes">Tuning</property>
+                      </object>
+                      <packing>
+                        <property name="position">0</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="drum-controls-header-damp">
+                        <property name="visible">True</property>
+                        <property name="label" translatable="yes">Dampening</property>
+                      </object>
+                      <packing>
+                        <property name="position">1</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="drum-controls-header-expr">
+                        <property name="visible">True</property>
+                        <property name="label" translatable="yes">Expression</property>
+                      </object>
+                      <packing>
+                        <property name="position">2</property>
+                      </packing>
                     </child>
                   </object>
                   <packing>
-                    <property name="expand">True</property>
+                    <property name="expand">False</property>
                     <property name="fill">False</property>
                     <property name="position">0</property>
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkVBox" id="drum-tune-box">
+                  <object class="GtkVBox" id="drum-controls">
                     <property name="visible">True</property>
-                    <property name="spacing">10</property>
+                    <property name="homogeneous">False</property>
                     <child>
                       <placeholder />
                     </child>
                   </object>
                   <packing>
                     <property name="expand">True</property>
-                    <property name="fill">False</property>
+                    <property name="fill">True</property>
                     <property name="position">1</property>
-                  </packing>
-                </child>
-                <child>
-                  <object class="GtkVBox" id="drum-damp-box">
-                    <property name="visible">True</property>
-                    <property name="spacing">10</property>
-                    <child>
-                      <placeholder />
-                    </child>
-                  </object>
-                  <packing>
-                    <property name="expand">True</property>
-                    <property name="fill">False</property>
-                    <property name="position">2</property>
-                  </packing>
-                </child>
-                <child>
-                  <object class="GtkVBox" id="drum-expr-box">
-                    <property name="visible">True</property>
-                    <property name="spacing">10</property>
-                    <child>
-                      <placeholder />
-                    </child>
-                  </object>
-                  <packing>
-                    <property name="expand">True</property>
-                    <property name="fill">False</property>
-                    <property name="position">3</property>
                   </packing>
                 </child>
               </object>

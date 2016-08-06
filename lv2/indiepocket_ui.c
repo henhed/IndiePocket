@@ -39,17 +39,15 @@ typedef struct
   LV2UI_Write_Function write;
   LV2UI_Controller controller;
   GtkWidget *root;
-  GtkWidget *notebook;
-  GtkWidget *name_box;
-  GtkWidget *tune_box;
-  GtkWidget *damp_box;
-  GtkWidget *expr_box;
+  GtkWidget *drum_controls;
   GtkWidget *button;
   GtkWidget *statusbar;
+  gchar *drum_template;
 } IndiePocketUI;
 
 typedef struct
 {
+  const char *widget_id;
   LV2_URID uri;
   int8_t drum;
 } DrumProperty;
@@ -119,12 +117,10 @@ instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
   ui->write = write_function;
   ui->controller = controller;
   ui->root = NULL;
-  ui->notebook = NULL;
-  ui->name_box = NULL;
-  ui->tune_box = NULL;
-  ui->damp_box = NULL;
-  ui->expr_box = NULL;
+  ui->drum_controls = NULL;
   ui->button = NULL;
+  ui->statusbar = NULL;
+  ui->drum_template = NULL;
 
   *widget = NULL;
 
@@ -147,15 +143,27 @@ instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
   char cwdbuf[PATH_MAX + 1];
   char *cwd = getcwd (cwdbuf, PATH_MAX + 1);
   if (chdir (bundle_path) || chdir ("assets"))
-    fprintf (stderr, "indiepocket_ui.c: Could not cd to %sassets\n",
-             bundle_path);
+    fprintf (stderr, __FILE__ ": Could not cd to %sassets\n", bundle_path);
 
-  GtkBuilder *builder = gtk_builder_new ();
+  /* Touch custom GTK type to register it's widget class.  */
+  (void) PCKT_GTK_TYPE_DIAL;
+
   GError *error = NULL;
-  if (!gtk_builder_add_from_file (builder, "ui.xml", &error))
+  GtkBuilder *builder = gtk_builder_new ();
+  if (!gtk_builder_add_from_file (builder, "layout.ui", &error))
     {
-      fprintf (stderr, "indiepocket_ui.c: %s\n", error->message);
+      fprintf (stderr, __FILE__ ": %s\n", error->message);
       g_error_free (error);
+      free (ui);
+      return NULL;
+    }
+
+  error = NULL;
+  if (!g_file_get_contents ("drum.ui", &ui->drum_template, NULL, &error))
+    {
+      fprintf (stderr, __FILE__ ": %s\n", error->message);
+      g_error_free (error);
+      g_object_unref (G_OBJECT (builder));
       free (ui);
       return NULL;
     }
@@ -165,26 +173,23 @@ instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
   if (cwd)
     chdir (cwd);
 
-  void *widget_map[8][2] = {
+  void *widget_map[4][2] = {
     {&ui->root, "root"},
-    {&ui->notebook, "notebook"},
-    {&ui->name_box, "drum-name-box"},
-    {&ui->tune_box, "drum-tune-box"},
-    {&ui->damp_box, "drum-damp-box"},
-    {&ui->expr_box, "drum-expr-box"},
-    {&ui->statusbar, "statusbar"},
-    {&ui->button, "file-chooser-button"}
+    {&ui->drum_controls, "drum-controls"},
+    {&ui->button, "file-chooser-button"},
+    {&ui->statusbar, "statusbar"}
   };
 
-  for (uint8_t i = 0; i < 8; ++i)
+  for (uint8_t i = 0; i < 4; ++i)
     {
       GtkWidget **ref = (GtkWidget **) widget_map[i][0];
       const char *id = (const char *) widget_map[i][1];
       *ref = GTK_WIDGET (gtk_builder_get_object (builder, id));
       if (!*ref)
         {
-          fprintf (stderr, "indiepocket_ui.c: Widget \"%s\" not found\n", id);
+          fprintf (stderr, __FILE__ ": Widget \"%s\" not found\n", id);
           g_object_unref (G_OBJECT (builder));
+          free (ui->drum_template);
           free (ui);
           return NULL;
         }
@@ -208,6 +213,7 @@ cleanup (LV2UI_Handle handle)
   clear_drum_controls (ui);
   g_object_unref (G_OBJECT (ui->root));
   gtk_widget_destroy (ui->root);
+  free (ui->drum_template);
   free (ui);
 }
 
@@ -242,38 +248,10 @@ static void
 clear_drum_controls (IndiePocketUI *ui)
 {
   GList *children, *it;
-  GtkContainer *containers[4] = {
-    GTK_CONTAINER (ui->tune_box),
-    GTK_CONTAINER (ui->name_box),
-    GTK_CONTAINER (ui->damp_box),
-    GTK_CONTAINER (ui->expr_box)
-  };
-  for (uint8_t i = 0; i < 4; ++i)
-    {
-      children = gtk_container_get_children (containers[i]);
-      for (it = children; it != NULL; it = g_list_next (it))
-        gtk_widget_destroy (GTK_WIDGET (it->data));
-      g_list_free (children);
-    }
-}
-
-/* Create widget to control given drum property.  */
-static GtkWidget *
-create_drum_control (IndiePocketUI *ui, DrumProperty *prop,
-                     float value, float from, float to, float step)
-{
-  GtkAdjustment *adj = (GtkAdjustment *) gtk_adjustment_new (value, from, to,
-                                                             step, 0.5, 0);
-  GtkWidget *dial = pckt_gtk_dial_new_with_adjustment (adj);
-  DrumProperty *prop_data = malloc (sizeof (DrumProperty));
-  memcpy (prop_data, prop, sizeof (DrumProperty));
-
-  g_signal_connect (dial, "value-changed",
-                    G_CALLBACK (on_drum_prop_changed), ui);
-  g_object_set_data_full (G_OBJECT (dial),
-                          DRUM_PROPERTY_KEY, prop_data,
-                          (GDestroyNotify) free);
-  return dial;
+  children = gtk_container_get_children (GTK_CONTAINER (ui->drum_controls));
+  for (it = children; it != NULL; it = g_list_next (it))
+    gtk_widget_destroy (GTK_WIDGET (it->data));
+  g_list_free (children);
 }
 
 /* Drum meta notification callback.  */
@@ -293,41 +271,51 @@ on_drum_loaded (IndiePocketUI *ui, const LV2_Atom_Object *obj)
   int8_t index = *(const int *) LV2_ATOM_BODY_CONST (index_atom);
   const char *name = (const char *) LV2_ATOM_BODY_CONST (name_atom);
 
-  /* Create drum label.  */
-  GtkWidget *name_label;
+  GError *error = NULL;
+  GtkBuilder *builder = gtk_builder_new ();
+  if (!gtk_builder_add_from_string (builder, ui->drum_template, -1, &error))
+    {
+      fprintf (stderr, __FILE__ ": %s\n", error->message);
+      g_error_free (error);
+      return;
+    }
+
+  GObject *name_label = gtk_builder_get_object (builder, "name-label");
   if (strlen (name))
-    name_label = gtk_label_new (name);
+    gtk_label_set_label (GTK_LABEL (name_label), name);
   else
     {
       char *anon = g_strdup_printf ("Drum #%d", index);
-      name_label = gtk_label_new (anon);
+      gtk_label_set_label (GTK_LABEL (name_label), anon);
       g_free (anon);
     }
-  gtk_misc_set_alignment (GTK_MISC (name_label), 0.5, 0.5);
-  gtk_box_pack_start (GTK_BOX (ui->name_box), GTK_WIDGET (name_label),
-                      TRUE, TRUE, 0);
-  gtk_widget_show (name_label);
 
-  /* Create tuning control.  */
-  DrumProperty tune_prop = {ui->uris.pckt_tuning, index};
-  GtkWidget *tune_ctrl = create_drum_control (ui, &tune_prop, 0, -12, 12, 0.1);
-  gtk_box_pack_start (GTK_BOX (ui->tune_box), GTK_WIDGET (tune_ctrl),
-                      TRUE, TRUE, 0);
-  gtk_widget_show (tune_ctrl);
+  DrumProperty props[] = {
+    {"tune-dial", ui->uris.pckt_tuning, index},
+    {"damp-dial", ui->uris.pckt_dampening, index},
+    {"expr-dial", ui->uris.pckt_expression, index}
+  };
 
-  /* Create dampening control.  */
-  DrumProperty damp_prop = {ui->uris.pckt_dampening, index};
-  GtkWidget *damp_ctrl = create_drum_control (ui, &damp_prop, 0, 0, 1, 0.01);
-  gtk_box_pack_start (GTK_BOX (ui->damp_box), GTK_WIDGET (damp_ctrl),
-                      TRUE, TRUE, 0);
-  gtk_widget_show (damp_ctrl);
+  for (uint8_t i = 0; i < 3; ++i)
+    {
+      GObject *dial = gtk_builder_get_object (builder, props[i].widget_id);
+      if (!PCKT_GTK_IS_DIAL (dial))
+        continue;
 
-  /* Create expression control.  */
-  DrumProperty expr_prop = {ui->uris.pckt_expression, index};
-  GtkWidget *expr_ctrl = create_drum_control (ui, &expr_prop, 0, -1, 1, 0.01);
-  gtk_box_pack_start (GTK_BOX (ui->expr_box), GTK_WIDGET (expr_ctrl),
-                      TRUE, TRUE, 0);
-  gtk_widget_show (expr_ctrl);
+      DrumProperty *prop = malloc (sizeof (DrumProperty));
+      memcpy (prop, props + i, sizeof (DrumProperty));
+      g_object_set_data_full (G_OBJECT (dial),
+                              DRUM_PROPERTY_KEY, prop,
+                              (GDestroyNotify) free);
+
+      g_signal_connect (dial, "value-changed",
+                        G_CALLBACK (on_drum_prop_changed), ui);
+    }
+
+  GtkWidget *root = GTK_WIDGET (gtk_builder_get_object (builder, "root"));
+  gtk_container_add (GTK_CONTAINER (ui->drum_controls), root);
+
+  g_object_unref (G_OBJECT (builder));
 }
 
 /* Port event listener.  */
