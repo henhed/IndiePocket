@@ -45,6 +45,10 @@ def configure(cnf):
         'CFLAGS',
         ['-Wall', '-Werror', '-Wextra', '-std=c99', '-fpic']
     )
+    cnf.env.prepend_value(
+        'LDFLAGS',
+        ['-z', 'nodelete']
+    )
 
 def build(bld):
     lib_pattern = re.sub('^lib', '', bld.env.cshlib_PATTERN)
