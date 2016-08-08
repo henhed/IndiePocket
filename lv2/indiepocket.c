@@ -170,12 +170,17 @@ handle_event (IndiePocket *plugin, LV2_Atom_Event *event)
           int8_t index = ((const LV2_Atom_Int *) sub)->body;
           float value = ((const LV2_Atom_Float *) val)->body;
           PcktDrumMeta *meta = pckt_kit_get_drum_meta (plugin->kit, index);
-          if (meta && (key == plugin->uris.pckt_tuning))
-            pckt_drum_meta_set_tuning (meta, value);
-          else if (meta && (key == plugin->uris.pckt_dampening))
-            pckt_drum_meta_set_dampening (meta, value);
-          else if (meta && (key == plugin->uris.pckt_expression))
-            pckt_drum_meta_set_expression (meta, value);
+          if (meta)
+            {
+              if (key == plugin->uris.pckt_tuning)
+                pckt_drum_meta_set_tuning (meta, value);
+              else if (key == plugin->uris.pckt_dampening)
+                pckt_drum_meta_set_dampening (meta, value);
+              else if (key == plugin->uris.pckt_expression)
+                pckt_drum_meta_set_expression (meta, value);
+              else if (key == plugin->uris.pckt_overlap)
+                pckt_drum_meta_set_sample_overlap (meta, value);
+            }
         }
       else
         lv2_log_error (&plugin->logger,

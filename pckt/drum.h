@@ -31,7 +31,6 @@ extern PcktDrum *pckt_drum_new ();
 extern void pckt_drum_free (PcktDrum *);
 extern bool pckt_drum_set_bleed (PcktDrum *, PcktChannel, float);
 extern bool pckt_drum_set_meta (PcktDrum *, const PcktDrumMeta *);
-extern bool pckt_drum_set_sample_overlap (PcktDrum *, float);
 extern bool pckt_drum_add_sample (PcktDrum *, PcktSample *, PcktChannel,
                                   const char *);
 extern bool pckt_drum_hit (const PcktDrum *, PcktSound *, float);
@@ -44,6 +43,8 @@ extern float pckt_drum_meta_get_dampening (const PcktDrumMeta *);
 extern bool pckt_drum_meta_set_dampening (PcktDrumMeta *, float);
 extern float pckt_drum_meta_get_expression (const PcktDrumMeta *);
 extern bool pckt_drum_meta_set_expression (PcktDrumMeta *, float);
+extern float pckt_drum_meta_get_sample_overlap (const PcktDrumMeta *);
+extern bool pckt_drum_meta_set_sample_overlap (PcktDrumMeta *, float);
 
 __END_DECLS
 

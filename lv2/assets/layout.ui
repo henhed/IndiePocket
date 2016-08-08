@@ -92,6 +92,18 @@
                                 <property name="position">2</property>
                               </packing>
                             </child>
+                            <child>
+                              <object class="GtkLabel" id="drum-header-olap">
+                                <property name="visible">True</property>
+                                <property name="label" translatable="yes">Overlap</property>
+                                <property name="ypad">5</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">False</property>
+                                <property name="position">3</property>
+                              </packing>
+                            </child>
                           </object> <!-- GtkHBox#drum-header -->
                           <packing>
                             <property name="expand">False</property>

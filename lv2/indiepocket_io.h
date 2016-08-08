@@ -70,6 +70,7 @@ typedef struct {
   LV2_URID pckt_dampening;
   LV2_URID pckt_freeKit;
   LV2_URID pckt_index;
+  LV2_URID pckt_overlap;
   LV2_URID pckt_tuning;
 } IPIOURIs;
 
@@ -97,6 +98,7 @@ ipio_map_uris (IPIOURIs *uris, LV2_URID_Map *map)
   uris->pckt_dampening = map->map (map->handle, IPCKT_URI_PREFIX "dampening");
   uris->pckt_freeKit = map->map (map->handle, IPCKT_URI_PREFIX "freeKit");
   uris->pckt_index = map->map (map->handle, IPCKT_URI_PREFIX "index");
+  uris->pckt_overlap = map->map (map->handle, IPCKT_URI_PREFIX "overlap");
   uris->pckt_tuning = map->map (map->handle, IPCKT_URI_PREFIX "tuning");
 }
 

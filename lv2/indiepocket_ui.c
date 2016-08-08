@@ -293,10 +293,11 @@ on_drum_loaded (IndiePocketUI *ui, const LV2_Atom_Object *obj)
   DrumProperty props[] = {
     {"tune-dial", ui->uris.pckt_tuning, index},
     {"damp-dial", ui->uris.pckt_dampening, index},
-    {"expr-dial", ui->uris.pckt_expression, index}
+    {"expr-dial", ui->uris.pckt_expression, index},
+    {"olap-dial", ui->uris.pckt_overlap, index}
   };
 
-  for (uint8_t i = 0; i < 3; ++i)
+  for (uint8_t i = 0; i < 4; ++i)
     {
       GObject *dial = gtk_builder_get_object (builder, props[i].widget_id);
       if (!PCKT_GTK_IS_DIAL (dial))

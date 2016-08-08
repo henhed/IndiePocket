@@ -35,7 +35,6 @@ struct PcktDrumImpl
   PcktDrumSample samples[PCKT_NCHANNELS][MAX_NUM_SAMPLES];
   size_t nsamples[PCKT_NCHANNELS];
   float bleed[PCKT_NCHANNELS];
-  float overlap;
 };
 
 struct PcktDrumMetaImpl
@@ -44,6 +43,7 @@ struct PcktDrumMetaImpl
   float tuning;
   float dampening;
   float expression;
+  float overlap;
 };
 
 PcktDrum *
@@ -91,15 +91,6 @@ pckt_drum_set_meta (PcktDrum *drum, const PcktDrumMeta *meta)
   if (!drum)
     return false;
   drum->meta = meta;
-  return true;
-}
-
-bool
-pckt_drum_set_sample_overlap (PcktDrum *drum, float overlap)
-{
-  if (!drum || overlap < 0)
-    return false;
-  drum->overlap = overlap;
   return true;
 }
 
@@ -152,10 +143,13 @@ get_sample_for_hit (const PcktDrum *drum, PcktChannel ch, float force,
 
   uint8_t index;
   float probability = 0;
-  float scale = 1.f + drum->overlap;
   float weights[nsamples];
   float weight_sum = 0;
   float width = 1.f / nsamples;
+  float scale = 1.f;
+
+  if (drum->meta)
+    scale += drum->meta->overlap;
 
   /* Gather sample weights based on range and proximity to given FORCE.  */
   for (index = 0; index < nsamples; ++index)
@@ -325,5 +319,20 @@ pckt_drum_meta_set_expression (PcktDrumMeta *meta, float expression)
   if (!meta || expression < -1 || expression > 1)
     return false;
   meta->expression = expression;
+  return true;
+}
+
+float
+pckt_drum_meta_get_sample_overlap (const PcktDrumMeta *meta)
+{
+  return meta ? meta->overlap : 0;
+}
+
+bool
+pckt_drum_meta_set_sample_overlap (PcktDrumMeta *meta, float overlap)
+{
+  if (!meta || overlap < 0)
+    return false;
+  meta->overlap = overlap;
   return true;
 }
