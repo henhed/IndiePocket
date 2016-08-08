@@ -1,7 +1,74 @@
-style "pckt-header"
+gtk_color_scheme = "pckt_primary:#3465a4\npckt_accent:#ff5722\npckt_text:#fff\npckt_bg_light:#3d3d3d\npckt_bg_dark:#191919"
+
+style "pckt-default"
 {
-  bg[NORMAL] = "#3465a4"
+  bg[NORMAL] = @pckt_bg_light
+  bg[SELECTED] = @pckt_accent
 }
 
-widget "*.indiepocket.*.GtkEventBox" style:highest "pckt-header"
+style "pckt-header" = "pckt-default"
+{
+  bg[NORMAL] = @pckt_primary
+}
+
+style "pckt-text" = "pckt-default"
+{
+  fg[NORMAL] = @pckt_text
+}
+
+style "pckt-notebook" = "pckt-default"
+{
+  xthickness = 1
+  ythickness = 1
+
+  bg[NORMAL] = @pckt_bg_dark
+
+  engine "clearlooks" {
+    radius = 0.0
+    contrast = 0.67
+  }
+}
+
+style "pckt-notebook-tab-label" = "pckt-default"
+{
+  fg[NORMAL] = mix(0.7, @pckt_text, @pckt_bg_dark)
+}
+
+style "pckt-viewport" = "pckt-default"
+{
+  xthickness = 0
+  ythickness = 0
+
+  bg[NORMAL] = @pckt_bg_dark
+}
+
+style "pckt-drum-header" = "pckt-default"
+{
+  fg[NORMAL] = mix(0.5, @pckt_accent, @pckt_bg_dark)
+  font_name = "italic"
+}
+
+style "pckt-drum-row" = "pckt-default"
+{
+  bg[NORMAL] = @pckt_bg_light
+  fg[NORMAL] = mix(0.7, @pckt_text, @pckt_bg_light)
+}
+
+style "pckt-dial" = "pckt-default"
+{
+  fg[NORMAL] = @pckt_bg_dark
+  fg[SELECTED] = @pckt_accent
+  fg[ACTIVE] = mix(0.7, @pckt_text, @pckt_accent)
+  fg[PRELIGHT] = mix(0.5, @pckt_text, @pckt_accent)
+}
+
+widget "*.pckt" style:highest "pckt-default"
+widget "*.pckt.*.header" style:highest "pckt-header"
+widget "*.pckt.*.GtkLabel" style:highest "pckt-text"
+widget "*.pckt.*.GtkNotebook" style:highest "pckt-notebook"
+widget "*.pckt.*.GtkNotebook.GtkLabel" style:highest "pckt-notebook-tab-label"
+widget "*.pckt.*.GtkViewport" style:highest "pckt-viewport"
+widget "*.pckt.*.drum-header.*" style:highest "pckt-drum-header"
+widget "*.pckt.*.drum-row.*" style:highest "pckt-drum-row"
+widget "*.pckt.*.PcktGtkDial" style:highest "pckt-dial"
 

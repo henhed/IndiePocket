@@ -2,13 +2,22 @@
 <interface>
 
   <object class="GtkVBox" id="root">
+    <property name="name">drum-row</property>
     <property name="visible">True</property>
     <property name="homogeneous">False</property>
     <child>
-      <object class="GtkLabel" id="name-label">
+      <object class="GtkEventBox" id="header">
+        <property name="name">drum-row-header</property>
         <property name="visible">True</property>
-        <property name="ellipsize">end</property>
-        <property name="xalign">0</property>
+        <child>
+          <object class="GtkLabel" id="name-label">
+            <property name="visible">True</property>
+            <property name="ellipsize">end</property>
+            <property name="xalign">0</property>
+            <property name="xpad">10</property>
+            <property name="ypad">5</property>
+          </object>
+        </child>
       </object>
       <packing>
         <property name="expand">False</property>
@@ -17,46 +26,51 @@
       </packing>
     </child>
     <child>
-      <object class="GtkHBox" id="controls">
+      <object class="GtkEventBox" id="body">
+        <property name="name">drum-row-body</property>
         <property name="visible">True</property>
-        <property name="border-width">10</property>
-        <property name="homogeneous">True</property>
-        <property name="spacing">10</property>
         <child>
-          <object class="PcktGtkDial" id="tune-dial">
+          <object class="GtkHBox" id="controls">
             <property name="visible">True</property>
-            <property name="adjustment">tune-dial-adjustment</property>
-            <property name="default-value">0</property>
+            <property name="homogeneous">True</property>
+            <property name="border-width">5</property>
+            <child>
+              <object class="PcktGtkDial" id="tune-dial">
+                <property name="visible">True</property>
+                <property name="adjustment">tune-dial-adjustment</property>
+                <property name="default-value">0</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">False</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="PcktGtkDial" id="damp-dial">
+                <property name="visible">True</property>
+                <property name="adjustment">damp-dial-adjustment</property>
+                <property name="default-value">0</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">False</property>
+                <property name="position">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="PcktGtkDial" id="expr-dial">
+                <property name="visible">True</property>
+                <property name="adjustment">expr-dial-adjustment</property>
+                <property name="default-value">0</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">False</property>
+                <property name="position">2</property>
+              </packing>
+            </child>
           </object>
-          <packing>
-            <property name="expand">False</property>
-            <property name="fill">False</property>
-            <property name="position">0</property>
-          </packing>
-        </child>
-        <child>
-          <object class="PcktGtkDial" id="damp-dial">
-            <property name="visible">True</property>
-            <property name="adjustment">damp-dial-adjustment</property>
-            <property name="default-value">0</property>
-          </object>
-          <packing>
-            <property name="expand">False</property>
-            <property name="fill">False</property>
-            <property name="position">1</property>
-          </packing>
-        </child>
-        <child>
-          <object class="PcktGtkDial" id="expr-dial">
-            <property name="visible">True</property>
-            <property name="adjustment">expr-dial-adjustment</property>
-            <property name="default-value">0</property>
-          </object>
-          <packing>
-            <property name="expand">False</property>
-            <property name="fill">False</property>
-            <property name="position">2</property>
-          </packing>
         </child>
       </object>
       <packing>

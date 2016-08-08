@@ -179,7 +179,7 @@ pckt_gtk_dial_expose (GtkWidget *widget, GdkEventExpose *event)
   cairo_clip (cr);
 
   /* Draw track.  */
-  SET_CAIRO_COLOR (cr, widget->style->dark[GTK_STATE_NORMAL]);
+  SET_CAIRO_COLOR (cr, widget->style->fg[GTK_STATE_NORMAL]);
   cairo_set_line_cap (cr, CAIRO_LINE_CAP_ROUND);
   cairo_set_line_width (cr, weight);
   cairo_arc (cr, ox, oy, radius, 0, M_PI * 2);
@@ -226,11 +226,11 @@ pckt_gtk_dial_expose (GtkWidget *widget, GdkEventExpose *event)
     }
 
   if (gtk_widget_has_grab (widget))
-    SET_CAIRO_COLOR (cr, widget->style->light[GTK_STATE_SELECTED]);
+    SET_CAIRO_COLOR (cr, widget->style->fg[GTK_STATE_ACTIVE]);
   else if (gtk_widget_get_state (widget) == GTK_STATE_PRELIGHT)
-    SET_CAIRO_COLOR (cr, widget->style->mid[GTK_STATE_SELECTED]);
+    SET_CAIRO_COLOR (cr, widget->style->fg[GTK_STATE_PRELIGHT]);
   else
-    SET_CAIRO_COLOR (cr, widget->style->dark[GTK_STATE_SELECTED]);
+    SET_CAIRO_COLOR (cr, widget->style->fg[GTK_STATE_SELECTED]);
 
   cairo_set_line_cap (cr, CAIRO_LINE_CAP_ROUND);
   cairo_set_line_width (cr, weight);

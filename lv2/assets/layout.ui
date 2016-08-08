@@ -1,15 +1,20 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <interface>
+
   <object class="GtkEventBox" id="root">
-    <property name="name">indiepocket</property>
+    <property name="name">pckt</property>
     <property name="visible">True</property>
     <child>
+
       <object class="GtkVBox" id="layout">
         <property name="visible">True</property>
         <property name="homogeneous">False</property>
         <property name="spacing">10</property>
         <child>
+
+          <!-- ##### HEADER LOGO ##### -->
           <object class="GtkEventBox" id="header">
+            <property name="name">header</property>
             <property name="visible">True</property>
             <child>
               <object class="GtkImage" id="logo">
@@ -22,68 +27,102 @@
             <property name="expand">False</property>
             <property name="position">0</property>
           </packing>
+
         </child>
         <child>
+
+          <!-- ##### MAIN CONTROLS AREA ##### -->
           <object class="GtkNotebook" id="notebook">
             <property name="visible">True</property>
             <child>
-              <object class="GtkVBox" id="drum-tab">
+
+              <object class="GtkScrolledWindow" id="drum-window">
                 <property name="visible">True</property>
-                <property name="homogeneous">False</property>
-                <property name="border-width">10</property>
+                <property name="hscrollbar-policy">never</property>
+                <property name="vscrollbar-policy">automatic</property>
                 <child>
-                  <object class="GtkHBox" id="drum-controls-header">
+
+                  <object class="GtkViewport" id="drum-viewport">
                     <property name="visible">True</property>
-                    <property name="homogeneous">True</property>
                     <child>
-                      <object class="GtkLabel" id="drum-controls-header-tune">
+
+                      <object class="GtkVBox" id="drum-tab">
                         <property name="visible">True</property>
-                        <property name="label" translatable="yes">Tuning</property>
-                      </object>
-                      <packing>
-                        <property name="position">0</property>
-                      </packing>
+                        <property name="homogeneous">False</property>
+                        <child>
+
+                          <!-- ##### DRUM CONTROLS HEADER ##### -->
+                          <object class="GtkHBox" id="drum-header">
+                            <property name="name">drum-header</property>
+                            <property name="visible">True</property>
+                            <property name="homogeneous">True</property>
+                            <property name="border-width">5</property>
+                            <child>
+                              <object class="GtkLabel" id="drum-header-tune">
+                                <property name="visible">True</property>
+                                <property name="label" translatable="yes">Tuning</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">False</property>
+                                <property name="position">0</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="drum-header-damp">
+                                <property name="visible">True</property>
+                                <property name="label" translatable="yes">Damping</property>
+                                <property name="ypad">5</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">False</property>
+                                <property name="position">1</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="drum-header-expr">
+                                <property name="visible">True</property>
+                                <property name="label" translatable="yes">Expression</property>
+                                <property name="ypad">5</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">False</property>
+                                <property name="position">2</property>
+                              </packing>
+                            </child>
+                          </object> <!-- GtkHBox#drum-header -->
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">False</property>
+                            <property name="position">0</property>
+                          </packing>
+
+                        </child>
+                        <child>
+
+                          <!-- ##### DRUM CONTROLS ##### -->
+                          <object class="GtkVBox" id="drum-controls">
+                            <property name="visible">True</property>
+                            <property name="homogeneous">False</property>
+                            <property name="spacing">1</property>
+                            <child>
+                              <placeholder /> <!-- drum.ui -->
+                            </child>
+                          </object>
+                          <packing>
+                            <property name="expand">True</property>
+                            <property name="fill">True</property>
+                            <property name="position">1</property>
+                          </packing>
+
+                        </child>
+                      </object> <!-- GtkVBox#drum-tab -->
                     </child>
-                    <child>
-                      <object class="GtkLabel" id="drum-controls-header-damp">
-                        <property name="visible">True</property>
-                        <property name="label" translatable="yes">Dampening</property>
-                      </object>
-                      <packing>
-                        <property name="position">1</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkLabel" id="drum-controls-header-expr">
-                        <property name="visible">True</property>
-                        <property name="label" translatable="yes">Expression</property>
-                      </object>
-                      <packing>
-                        <property name="position">2</property>
-                      </packing>
-                    </child>
-                  </object>
-                  <packing>
-                    <property name="expand">False</property>
-                    <property name="fill">False</property>
-                    <property name="position">0</property>
-                  </packing>
+                  </object> <!-- GtkViewport#drum-viewport -->
                 </child>
-                <child>
-                  <object class="GtkVBox" id="drum-controls">
-                    <property name="visible">True</property>
-                    <property name="homogeneous">False</property>
-                    <child>
-                      <placeholder />
-                    </child>
-                  </object>
-                  <packing>
-                    <property name="expand">True</property>
-                    <property name="fill">True</property>
-                    <property name="position">1</property>
-                  </packing>
-                </child>
-              </object>
+              </object> <!-- GtkScrolledWindow#drum-window -->
             </child>
             <child type="tab">
               <object class="GtkLabel" id="drum-tab-label">
@@ -91,14 +130,17 @@
                 <property name="label" translatable="yes">Drums</property>
               </object>
             </child>
-          </object>
+          </object> <!-- GtkNotebook#notebook -->
           <packing>
             <property name="expand">True</property>
             <property name="fill">True</property>
             <property name="position">1</property>
           </packing>
+
         </child>
         <child>
+
+          <!-- ##### BUTTON BOX ##### -->
           <object class="GtkHButtonBox" id="button-box">
             <property name="visible">True</property>
             <property name="layout-style">end</property>
@@ -112,8 +154,11 @@
             <property name="expand">False</property>
             <property name="position">2</property>
           </packing>
+
         </child>
         <child>
+
+          <!-- ##### STATUSBAR ##### -->
           <object class="GtkStatusbar" id="statusbar">
             <property name="visible">True</property>
             <property name="has-resize-grip">False</property>
@@ -122,9 +167,11 @@
             <property name="expand">False</property>
             <property name="position">3</property>
           </packing>
+
         </child>
-      </object>
+      </object> <!-- GtkVBox#layout -->
     </child>
-  </object>
+  </object> <!-- GtkEventBox#root -->
+
 </interface>
 
