@@ -54,7 +54,7 @@ def build(bld):
     lib_pattern = re.sub('^lib', '', bld.env.cshlib_PATTERN)
 
     bld.objects(
-        source='pckt/kit.c pckt/drum.c pckt/sound.c pckt/sample.c',
+        source='pckt/kit.c pckt/drum.c pckt/sound.c pckt/sample.c pckt/util.c',
         target='pckt_base',
         use='M'
     )
@@ -64,7 +64,7 @@ def build(bld):
         use='SNDFILE'
     )
     bld.objects(
-        source='pckt/kit_factory.c',
+        source='pckt/kit_factory.c pckt/kit_parser_ttl.c',
         target='pckt_kitfct',
         use='SERD SORD',
         defines=['_DEFAULT_SOURCE', '_BSD_SOURCE'] # for realpath

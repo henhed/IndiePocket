@@ -30,6 +30,7 @@
 #include <lv2/lv2plug.in/ns/ext/worker/worker.h>
 
 /* IndiePocket headers.  */
+#include "../pckt/kit_factory.h"
 #include "../pckt/kit.h"
 #include "../pckt/sound.h"
 #include "../pckt/drum.h"

@@ -26,7 +26,6 @@
 __BEGIN_DECLS
 
 typedef struct PcktKitImpl PcktKit;
-typedef struct PcktKitFactoryImpl PcktKitFactory;
 
 extern PcktKit *pckt_kit_new ();
 extern void pckt_kit_free (PcktKit *);
@@ -36,9 +35,6 @@ extern int8_t pckt_kit_add_drum_meta (PcktKit *, PcktDrumMeta *);
 extern PcktDrumMeta *pckt_kit_get_drum_meta (const PcktKit *, int8_t);
 extern bool pckt_kit_set_choke (PcktKit *, int8_t, int8_t, bool);
 extern bool pckt_kit_choke_by_id (const PcktKit *, PcktSoundPool *, int8_t);
-extern PcktKitFactory *pckt_kit_factory_new (const char *, PcktStatus *);
-extern void pckt_kit_factory_free (PcktKitFactory *);
-extern PcktKit *pckt_kit_factory_load (const PcktKitFactory *);
 
 __END_DECLS
 
