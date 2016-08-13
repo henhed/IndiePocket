@@ -49,7 +49,7 @@ load_sample (PcktSample *sample, SNDFILE *file, const SF_INFO *info)
 }
 
 PcktSample *
-pckt_sample_factory (const char *filename)
+pckt_sample_factory_mono (const char *filename)
 {
   SF_INFO info;
   info.format = 0;
@@ -69,4 +69,56 @@ pckt_sample_factory (const char *filename)
 
   sf_close (file);
   return sample;
+}
+
+PcktSample **
+pckt_sample_factory (const char *filename, size_t *nchannels)
+{
+  PcktSample **samples = NULL;
+  SF_INFO info;
+  SNDFILE *file;
+  uint8_t ch;
+
+  info.format = 0;
+  file = sf_open (filename, SFM_READ, &info);
+
+  if (!file)
+    return NULL;
+
+  samples = calloc (info.channels + 1, sizeof (PcktSample *));
+  if (!samples)
+    {
+      sf_close (file);
+      return NULL;
+    }
+
+  for (ch = 0; ch < info.channels; ++ch)
+    {
+      samples[ch] = pckt_sample_new ();
+      pckt_sample_rate (samples[ch], (uint32_t) info.samplerate);
+      pckt_sample_resize (samples[ch], (size_t) info.frames);
+      pckt_sample_set_interpolation (samples[ch], PCKT_INTRPL_LINEAR);
+    }
+  samples[info.channels] = NULL;
+
+  uint32_t f;
+  size_t nframes = 4096;
+  float frames[nframes];
+  float interleaved[nframes * info.channels];
+  sf_count_t nread;
+  while ((nread = sf_readf_float (file, interleaved, nframes)) > 0)
+    {
+      for (ch = 0; ch < info.channels; ++ch)
+        {
+          for (f = 0; f < nread; ++f)
+            frames[f] = interleaved[(f * info.channels) + ch];
+          pckt_sample_write (samples[ch], frames, nread);
+        }
+    }
+
+  if (nchannels)
+    *nchannels = (size_t) info.channels;
+
+  sf_close (file);
+  return samples;
 }

@@ -64,7 +64,7 @@ def build(bld):
         use='SNDFILE'
     )
     bld.objects(
-        source='pckt/kit_factory.c pckt/kit_parser_ttl.c',
+        source='pckt/kit_factory.c pckt/kit_parser_ttl.c pckt/kit_parser_bfk.c',
         target='pckt_kitfct',
         use='SERD SORD',
         defines=['_DEFAULT_SOURCE', '_BSD_SOURCE'] # for realpath

@@ -288,7 +288,7 @@ load_drum_samples (const TurtleParser *parser, PcktDrum *drum,
       for (char **path = globbuf.gl_pathv; *path != NULL; ++path)
         {
           char *name = *path;
-          PcktSample *sample = pckt_sample_factory (name);
+          PcktSample *sample = pckt_sample_factory_mono (name);
           if (!sample)
             continue;
 

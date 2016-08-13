@@ -21,16 +21,9 @@
 #include "kit_factory.h"
 #include "util.h"
 
-#define NUM_PARSERS 1
+#define NUM_PARSERS 2
 
-#ifdef _WIN32
-# define DIR_SEP '\\'
-# define BAD_DIR_SEP '/'
-#else
-# define DIR_SEP '/'
-# define BAD_DIR_SEP '\\'
-#endif
-
+extern PcktKitParserIface *pckt_kit_parser_bfk_new (const PcktKitFactory *);
 extern PcktKitParserIface *pckt_kit_parser_ttl_new (const PcktKitFactory *);
 
 struct PcktKitFactoryImpl {
@@ -44,7 +37,10 @@ PcktKitFactory *
 pckt_kit_factory_new (const char *filename, PcktStatus *status)
 {
   PcktKitFactory *factory = malloc (sizeof (PcktKitFactory));
-  PcktKitParserCtor parsers[NUM_PARSERS] = {pckt_kit_parser_ttl_new};
+  PcktKitParserCtor parsers[NUM_PARSERS] = {
+    pckt_kit_parser_bfk_new,
+    pckt_kit_parser_ttl_new
+  };
 
   if (!factory)
     {
@@ -128,20 +124,18 @@ pckt_kit_factory_get_basedir (const PcktKitFactory *factory)
 char *
 pckt_kit_factory_get_abspath (const PcktKitFactory *factory, const char *path)
 {
-  char *dirsep;
   char *relative;
   char *absolute;
 
   if (!factory || !path || (strlen (path) == 0))
     return NULL;
 
-  absolute = pckt_strdupf ("%s%c%s", factory->basedir, DIR_SEP, path);
+  absolute = pckt_strdupf ("%s%c%s", factory->basedir, PCKT_DIR_SEP, path);
   if (!absolute)
     return NULL;
 
   relative = absolute + strlen (factory->basedir) + 1;
-  while ((dirsep = strchr (relative, BAD_DIR_SEP)))
-    *dirsep = DIR_SEP;
+  pckt_fix_path (relative);
 
   return absolute;
 }

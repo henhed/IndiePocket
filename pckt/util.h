@@ -19,13 +19,34 @@
 #define PCKT_UTIL_H 1
 
 #include <stdarg.h>
+#include <string.h>
 #include "pckt.h"
+
+#ifdef _WIN32
+# define PCKT_DIR_SEP '\\'
+# define PCKT_BAD_DIR_SEP '/'
+#else
+# define PCKT_DIR_SEP '/'
+# define PCKT_BAD_DIR_SEP '\\'
+#endif
 
 __BEGIN_DECLS
 
 extern char *pckt_vstrdupf (const char *, va_list);
 extern char *pckt_strdupf (const char *, ...);
 extern float pckt_strtof (const char *, char **);
+
+static inline char *
+pckt_fix_path (char *path)
+{
+  char *dirsep;
+  if (path)
+    {
+      while ((dirsep = strchr (path, PCKT_BAD_DIR_SEP)))
+        *dirsep = PCKT_DIR_SEP;
+    }
+  return path;
+}
 
 __END_DECLS
 
