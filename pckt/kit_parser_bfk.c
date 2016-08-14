@@ -93,35 +93,57 @@ static const BfkDrumKeys drum_key_map[BFK_NUM_TYPES] = {
   { BFK_CYM3,  PCKT_CH5,       "CYM3",  "Cymbal 3"  }
 };
 
+typedef enum {
+  BFK_KICK_NO_SNARE = 0,
+  BFK_KICK_HIT,
+  BFK_SNARE_HIT,
+  BFK_SNARE_DRAG,
+  BFK_SNARE_FLAM,
+  BFK_SNARE_RIMSHOT,
+  BFK_SNARE_SIDESTICK,
+  BFK_HIHAT_CLOSED_TIP,
+  BFK_HIHAT_CLOSED_SHANK,
+  BFK_HIHAT_HALF_TIP,
+  BFK_HIHAT_HALF_SHANK,
+  BFK_HIHAT_OPEN_TIP,
+  BFK_HIHAT_PEDAL,
+  BFK_TOM1_HIT,
+  BFK_TOM2_HIT,
+  BFK_TOM3_HIT,
+  BFK_CYM1_HIT,
+  BFK_CYM2_HIT,
+  BFK_CYM3_HIT,
+  BFK_NUM_HIT_TYPES
+} BfkDrumHitType;
+
 typedef struct {
-  const char *name;
+  BfkDrumHitType id;
   BfkDrumType drum;
+  const char *name;
   int8_t midi_key;
   int8_t gate_key;
 } BfkDrumHit;
 
-#define BFK_NUM_HITS 19
-
-static const BfkDrumHit drum_hit_info[BFK_NUM_HITS] = {
-  { "NoSnare", BFK_KICK,  35, -1 },
-  { "Hit",     BFK_KICK,  36, -1 },
-  { "Hit",     BFK_SNARE, 38, -1 },
-  { "Drag",    BFK_SNARE, 39, -1 },
-  { "Flam",    BFK_SNARE, 41, -1 },
-  { "Rim",     BFK_SNARE, 40, -1 },
-  { "SS",      BFK_SNARE, 37, -1 },
-  { "ClosedT", BFK_HIHAT, 42, -1 },
-  { "ClosedS", BFK_HIHAT, 48, -1 },
-  { "HalfT",   BFK_HIHAT, 50, -1 },
-  { "HalfS",   BFK_HIHAT, 52, -1 },
-  { "OpenT",   BFK_HIHAT, 46, -1 },
-  { "Pedal",   BFK_HIHAT, 44, -1 },
-  { "Hit",     BFK_TOM1,  43, -1 },
-  { "Hit",     BFK_TOM2,  45, -1 },
-  { "Hit",     BFK_TOM3,  47, -1 },
-  { "Hit",     BFK_CYM1,  49, 54 },
-  { "Hit",     BFK_CYM2,  55, 56 },
-  { "Hit",     BFK_CYM3,  51, 58 }
+static const BfkDrumHit drum_hit_info[BFK_NUM_HIT_TYPES] = {
+  { BFK_KICK_NO_SNARE,      BFK_KICK,  "NoSnare", 35, -1 },
+  { BFK_KICK_HIT,           BFK_KICK,  "Hit",     36, -1 },
+  { BFK_SNARE_HIT,          BFK_SNARE, "Hit",     38, -1 },
+  { BFK_SNARE_DRAG,         BFK_SNARE, "Drag",    39, -1 },
+  { BFK_SNARE_FLAM,         BFK_SNARE, "Flam",    41, -1 },
+  { BFK_SNARE_RIMSHOT,      BFK_SNARE, "Rim",     40, -1 },
+  { BFK_SNARE_SIDESTICK,    BFK_SNARE, "SS",      37, -1 },
+  { BFK_HIHAT_CLOSED_TIP,   BFK_HIHAT, "ClosedT", 42, -1 },
+  { BFK_HIHAT_CLOSED_SHANK, BFK_HIHAT, "ClosedS", 48, -1 },
+  { BFK_HIHAT_HALF_TIP,     BFK_HIHAT, "HalfT",   50, -1 },
+  { BFK_HIHAT_HALF_SHANK,   BFK_HIHAT, "HalfS",   52, -1 },
+  { BFK_HIHAT_OPEN_TIP,     BFK_HIHAT, "OpenT",   46, -1 },
+  { BFK_HIHAT_PEDAL,        BFK_HIHAT, "Pedal",   44, -1 },
+  { BFK_TOM1_HIT,           BFK_TOM1,  "Hit",     43, -1 },
+  { BFK_TOM2_HIT,           BFK_TOM2,  "Hit",     45, -1 },
+  { BFK_TOM3_HIT,           BFK_TOM3,  "Hit",     47, -1 },
+  { BFK_CYM1_HIT,           BFK_CYM1,  "Hit",     49, 54 },
+  { BFK_CYM2_HIT,           BFK_CYM2,  "Hit",     55, 56 },
+  { BFK_CYM3_HIT,           BFK_CYM3,  "Hit",     51, 58 }
 };
 
 typedef struct {
@@ -518,7 +540,7 @@ load_drum (const BfkParser *parser, PcktKit *kit, const BfkDrumInfo *info)
       return;
     }
 
-  for (uint8_t i = 0; i < BFK_NUM_HITS; ++i)
+  for (uint8_t i = 0; i < BFK_NUM_HIT_TYPES; ++i)
     {
       const BfkDrumHit *hit = &drum_hit_info[i];
       if (hit->drum == info->keys->id)
@@ -529,10 +551,36 @@ load_drum (const BfkParser *parser, PcktKit *kit, const BfkDrumInfo *info)
           PcktDrum *drum = load_drum_hit (parser, info, hit);
           if (drum)
             {
+              int8_t gate;
+
               pckt_drum_set_meta (drum, meta);
               pckt_kit_add_drum (kit, drum, hit->midi_key);
-              if (hit->gate_key >= 0)
-                pckt_kit_set_choke (kit, hit->gate_key, hit->midi_key, true);
+
+              switch (hit->id)
+                {
+                case BFK_HIHAT_OPEN_TIP:
+                  gate = drum_hit_info[BFK_HIHAT_HALF_TIP].midi_key;
+                  pckt_kit_set_choke (kit, gate, hit->midi_key, true);
+                  gate = drum_hit_info[BFK_HIHAT_HALF_SHANK].midi_key;
+                  pckt_kit_set_choke (kit, gate, hit->midi_key, true);
+                  /* break intentially omitted.  */
+
+                case BFK_HIHAT_HALF_TIP:
+                case BFK_HIHAT_HALF_SHANK:
+                  gate = drum_hit_info[BFK_HIHAT_CLOSED_TIP].midi_key;
+                  pckt_kit_set_choke (kit, gate, hit->midi_key, true);
+                  gate = drum_hit_info[BFK_HIHAT_CLOSED_SHANK].midi_key;
+                  pckt_kit_set_choke (kit, gate, hit->midi_key, true);
+                  gate = drum_hit_info[BFK_HIHAT_PEDAL].midi_key;
+                  pckt_kit_set_choke (kit, gate, hit->midi_key, true);
+                  break;
+
+                default:
+                  if (hit->gate_key >= 0)
+                    pckt_kit_set_choke (kit, hit->gate_key, hit->midi_key,
+                                        true);
+                  break;
+                }
             }
         }
     }
