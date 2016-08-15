@@ -40,6 +40,7 @@ extern size_t pckt_sample_read (const PcktSample *, float *, size_t, size_t,
                                 uint32_t);
 extern size_t pckt_sample_write (PcktSample *, const float *, size_t);
 extern bool pckt_sample_resize (PcktSample *, size_t);
+extern bool pckt_sample_merge (PcktSample *, const PcktSample *, float, float);
 extern bool pckt_resample (PcktSample *, uint32_t);
 extern PcktSample *pckt_sample_factory_mono (const char *);
 extern PcktSample **pckt_sample_factory (const char *, size_t *);

@@ -471,7 +471,7 @@ load_drum_samples (const BfkParser *parser, PcktDrum *drum,
         mapped[mch] = samples[ch];
       else
         {
-          /* TODO: Merge samples mapped to the same channel.  */
+          pckt_sample_merge (mapped[mch], samples[ch], 0.5, 0.5);
           pckt_sample_free (samples[ch]);
         }
     }

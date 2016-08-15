@@ -219,6 +219,35 @@ pckt_sample_resize (PcktSample *sample, size_t nframes)
 }
 
 bool
+pckt_sample_merge (PcktSample *s1, const PcktSample *s2, float w1, float w2)
+{
+  uint32_t f = 0;
+
+  if (!s1 || !s2)
+    return false;
+
+  if ((s1->nframes < s2->nframes) && !pckt_sample_resize (s1, s2->nframes))
+    return false;
+
+  for (; (f < s1->nframes) && (f < s2->nframes); ++f)
+    s1->frames[f] = (s1->frames[f] * w1) + (s2->frames[f] * w2);
+
+  if (f < s1->nframes)
+    {
+      for (; f < s1->nframes; ++f)
+        s1->frames[f] *= w1;
+    }
+  else if (f < s2->nframes)
+    {
+      for (; f < s2->nframes; ++f)
+        s1->frames[f] = s2->frames[f] * w2;
+      s1->nframes = f;
+    }
+
+  return true;
+}
+
+bool
 pckt_resample (PcktSample *sample, uint32_t rate)
 {
   if (!sample || !rate)
