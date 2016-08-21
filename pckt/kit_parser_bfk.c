@@ -554,6 +554,7 @@ load_drum (const BfkParser *parser, PcktKit *kit, const BfkDrumInfo *info)
               int8_t gate;
 
               pckt_drum_set_meta (drum, meta);
+              pckt_drum_normalize (drum);
               pckt_kit_add_drum (kit, drum, hit->midi_key);
 
               switch (hit->id)

@@ -247,6 +247,34 @@ pckt_sample_merge (PcktSample *s1, const PcktSample *s2, float w1, float w2)
   return true;
 }
 
+float
+pckt_sample_normalize (PcktSample *sample)
+{
+  float peak = 0, factor;
+
+  if (!sample)
+    return 0.f;
+
+  for (uint32_t i = 0; i < sample->nframes; ++i)
+    {
+      float amp = fabsf (sample->frames[i]);
+      if (amp > peak)
+        peak = amp;
+    }
+
+  if (peak == 0.f)
+    return 0.f;
+  else if (peak == 1.f)
+    return 1.f;
+
+  factor = 1.f / peak;
+
+  for (uint32_t i = 0; i < sample->nframes; ++i)
+    sample->frames[i] *= factor;
+
+  return factor;
+}
+
 bool
 pckt_resample (PcktSample *sample, uint32_t rate)
 {

@@ -33,6 +33,7 @@ extern bool pckt_drum_set_bleed (PcktDrum *, PcktChannel, float);
 extern bool pckt_drum_set_meta (PcktDrum *, const PcktDrumMeta *);
 extern bool pckt_drum_add_sample (PcktDrum *, PcktSample *, PcktChannel,
                                   const char *);
+extern bool pckt_drum_normalize (PcktDrum *);
 extern bool pckt_drum_hit (const PcktDrum *, PcktSound *, float);
 extern PcktDrumMeta *pckt_drum_meta_new (const char *);
 extern void pckt_drum_meta_free (PcktDrumMeta *);

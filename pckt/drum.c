@@ -21,7 +21,7 @@
 #include "drum.h"
 #include "sample.h"
 
-#define MAX_NUM_SAMPLES 32
+#define MAX_NUM_SAMPLES 64
 #define TWELFTH_ROOT_OF_TWO 1.05946309435929526
 
 typedef struct {
@@ -127,6 +127,44 @@ pckt_drum_add_sample (PcktDrum *drum, PcktSample *sample, PcktChannel ch,
 
   qsort (drum->samples[ch], drum->nsamples[ch], sizeof (PcktDrumSample),
          drum_sample_cmp);
+
+  return true;
+}
+
+bool
+pckt_drum_normalize (PcktDrum *drum)
+{
+  if (!drum)
+    return false;
+
+  float tot_peak[PCKT_NCHANNELS], max_tot_peak = 0, max_peak = 0;
+  memset (tot_peak, 0, sizeof (float) * PCKT_NCHANNELS);
+
+  for (PcktChannel ch = PCKT_CH0; ch < PCKT_NCHANNELS; ++ch)
+    {
+      for (uint8_t i = 0; i < drum->nsamples[ch]; ++i)
+        {
+          PcktSample *sample = drum->samples[ch][i].sample;
+          float factor = pckt_sample_normalize (sample);
+
+          if (factor > 0.f)
+            {
+              float peak = 1.f / factor;
+              tot_peak[ch] += peak;
+              if (peak > max_peak)
+                max_peak = peak;
+            }
+        }
+
+      if (tot_peak[ch] > max_tot_peak)
+        max_tot_peak = tot_peak[ch];
+    }
+
+  if (!max_tot_peak)
+    return true;
+
+  for (PcktChannel ch = PCKT_CH0; ch < PCKT_NCHANNELS; ++ch)
+    drum->bleed[ch] *= (tot_peak[ch] / max_tot_peak) * max_peak;
 
   return true;
 }
