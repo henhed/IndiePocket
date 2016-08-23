@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import re
 from distutils.version import LooseVersion
+from subprocess import check_output
 
 APPNAME = 'IndiePocket.lv2'
 VERSION = '0.1.0'
@@ -36,6 +37,11 @@ def configure(cnf):
         cnf.define('HAVE_LV2_ATOM_OBJECT', 1)
     else:
         cnf.define('HAVE_LV2_ATOM_OBJECT', 0)
+
+    cnf.define(
+        'PCKT_VERSION',
+        check_output(['git', 'rev-parse', '--short=7', 'HEAD']).strip()
+    )
 
     require_pkg(cnf, 'serd-0', '0.18.2', 'SERD')
     require_pkg(cnf, 'sord-0', '0.12.0', 'SORD')

@@ -6,7 +6,7 @@ style "pckt-default"
   bg[SELECTED] = @pckt_accent
 }
 
-style "pckt-header" = "pckt-default"
+style "pckt-primary-bg" = "pckt-default"
 {
   bg[NORMAL] = @pckt_primary
 }
@@ -21,6 +21,8 @@ style "pckt-notebook" = "pckt-default"
   xthickness = 1
   ythickness = 1
 
+  GtkNotebook::tab-curvature = 20
+
   bg[NORMAL] = @pckt_bg_dark
 
   engine "clearlooks" {
@@ -34,12 +36,23 @@ style "pckt-notebook-tab-label" = "pckt-default"
   fg[NORMAL] = mix(0.7, @pckt_text, @pckt_bg_dark)
 }
 
+style "pckt-version-label" = "pckt-default"
+{
+  fg[NORMAL] = mix(0.7, @pckt_text, @pckt_primary)
+  font_name = "italic"
+}
+
 style "pckt-viewport" = "pckt-default"
 {
   xthickness = 0
   ythickness = 0
 
   bg[NORMAL] = @pckt_bg_dark
+}
+
+style "pckt-statusbar-label" = "pckt-default"
+{
+  fg[NORMAL] = mix(0.7, @pckt_text, @pckt_bg_light)
 }
 
 style "pckt-drum-header" = "pckt-default"
@@ -63,11 +76,14 @@ style "pckt-dial" = "pckt-default"
 }
 
 widget "*.pckt" style:highest "pckt-default"
-widget "*.pckt.*.header" style:highest "pckt-header"
+widget "*.pckt.*.header" style:highest "pckt-primary-bg"
+widget "*.pckt.*.body" style:highest "pckt-primary-bg"
 widget "*.pckt.*.GtkLabel" style:highest "pckt-text"
 widget "*.pckt.*.GtkNotebook" style:highest "pckt-notebook"
 widget "*.pckt.*.GtkNotebook.GtkLabel" style:highest "pckt-notebook-tab-label"
+widget "*.pckt.*.GtkNotebook.version-label" style:highest "pckt-version-label"
 widget "*.pckt.*.GtkViewport" style:highest "pckt-viewport"
+widget "*.pckt.*.GtkStatusbar.*.GtkLabel" style:highest "pckt-statusbar-label"
 widget "*.pckt.*.drum-header.*" style:highest "pckt-drum-header"
 widget "*.pckt.*.drum-row.*" style:highest "pckt-drum-row"
 widget "*.pckt.*.PcktGtkDial" style:highest "pckt-dial"

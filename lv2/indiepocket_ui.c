@@ -195,6 +195,13 @@ instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
         }
     }
 
+#ifdef PCKT_VERSION
+  GtkLabel *version_label;
+  version_label = GTK_LABEL (gtk_builder_get_object (builder, "version-label"));
+  if (version_label)
+    gtk_label_set_text (version_label, "Ver. " PCKT_VERSION);
+#endif
+
   g_object_ref (G_OBJECT (ui->root));
   g_object_unref (G_OBJECT (builder));
 
