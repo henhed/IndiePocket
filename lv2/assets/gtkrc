@@ -1,7 +1,11 @@
-gtk_color_scheme = "pckt_primary:#3465a4\npckt_accent:#ff5722\npckt_text:#fff\npckt_bg_light:#3d3d3d\npckt_bg_dark:#191919"
-
 style "pckt-default"
 {
+  color["pckt_primary"] = "#3465a4"
+  color["pckt_accent"] = "#ff5722"
+  color["pckt_text"] = "#fff"
+  color["pckt_bg_light"] = "#3d3d3d"
+  color["pckt_bg_dark"] = "#191919"
+
   bg[NORMAL] = @pckt_bg_light
   bg[SELECTED] = @pckt_accent
 }
