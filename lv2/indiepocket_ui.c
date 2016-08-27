@@ -18,6 +18,7 @@
 /* Standard headers.  */
 #include <stdlib.h>
 #include <unistd.h>
+#include <math.h>
 
 /* LV2 headers.  */
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
@@ -50,6 +51,8 @@ typedef struct
   const char *widget_id;
   LV2_URID uri;
   int8_t drum;
+  GtkLabel *label;
+  PcktGtkDial *dial;
 } DrumProperty;
 
 #ifndef PATH_MAX
@@ -80,6 +83,51 @@ on_file_selected (GtkWidget *widget, void *handle)
   g_free (filename);
 }
 
+/* Show state of given drum control.  */
+static void
+show_drum_prop_status (const DrumProperty *prop, IndiePocketUI *ui)
+{
+  GtkRange *range = GTK_RANGE (prop->dial);
+  float value = (float) gtk_range_get_value (range);
+  GtkStatusbar *statusbar = GTK_STATUSBAR (ui->statusbar);
+  guint context_id = gtk_statusbar_get_context_id (statusbar, prop->widget_id);
+  const char *name = gtk_label_get_text (prop->label);
+  char *message = NULL;
+
+  if (!strcmp (prop->widget_id, "tune-dial"))
+    {
+      message = g_strdup_printf ("%s tuning: %+.1f semitones", name, value);
+    }
+  else if (!strcmp (prop->widget_id, "damp-dial"))
+    {
+      message = g_strdup_printf ("%s damping: %d%%", name,
+                                 (int) (value * 100.f));
+    }
+  else if (!strcmp (prop->widget_id, "expr-dial"))
+    {
+      if (value == 0.f)
+        message = g_strdup_printf ("%s expression: linear", name);
+      else
+        message = g_strdup_printf ("%s expression: %d%% %s", name,
+                                   (int) (fabsf (value) * 100.f),
+                                   (value < 0.f) ? "laid-back" : "aggressive");
+    }
+  else if (!strcmp (prop->widget_id, "olap-dial"))
+    {
+      message = g_strdup_printf ("%s sample overlap: %d%%", name,
+                                 (int) (value * 100.f));
+    }
+  else
+    fprintf (stderr, "Unknown widget ID: %s\n", prop->widget_id);
+
+  if (message)
+    {
+      gtk_statusbar_remove_all (statusbar, context_id);
+      gtk_statusbar_push (statusbar, context_id, message);
+      g_free (message);
+    }
+}
+
 /* Drum control change callback.  */
 static void
 on_drum_prop_changed (GtkRange *range, void *handle)
@@ -97,6 +145,46 @@ on_drum_prop_changed (GtkRange *range, void *handle)
 
   ui->write (ui->controller, IPIO_CONTROL, lv2_atom_total_size (msg),
              ui->uris.atom_eventTransfer, msg);
+
+  show_drum_prop_status (prop, ui);
+}
+
+/* Drum control mouseover callback.  */
+static gboolean
+on_drum_prop_mouseover (GtkWidget *widget, GdkEvent *event, void *handle)
+{
+  (void) event;
+
+  if (gtk_widget_has_grab (widget))
+    return FALSE;
+
+  DrumProperty *prop = g_object_get_data (G_OBJECT (widget), DRUM_PROPERTY_KEY);
+  if (prop)
+    show_drum_prop_status (prop, (IndiePocketUI *) handle);
+
+  return FALSE;
+}
+
+/* Drum control mouseout callback.  */
+static gboolean
+on_drum_prop_mouseout (GtkWidget *widget, GdkEvent *event, void *handle)
+{
+  (void) event;
+
+  if (gtk_widget_has_grab (widget))
+    return FALSE;
+
+  IndiePocketUI *ui = (IndiePocketUI *) handle;
+  DrumProperty *prop = g_object_get_data (G_OBJECT (widget), DRUM_PROPERTY_KEY);
+  if (prop && ui)
+    {
+      GtkStatusbar *statusbar = GTK_STATUSBAR (ui->statusbar);
+      guint context_id = gtk_statusbar_get_context_id (statusbar,
+                                                       prop->widget_id);
+      gtk_statusbar_remove_all (statusbar, context_id);
+    }
+
+  return FALSE;
 }
 
 /* Set up UI.  */
@@ -235,12 +323,31 @@ on_kit_loaded (IndiePocketUI *ui, const LV2_Atom_Object *obj)
       return;
     }
 
+  GtkStatusbar *statusbar = GTK_STATUSBAR (ui->statusbar);
+  guint context_id = gtk_statusbar_get_context_id (statusbar, "kit");
   const char *filename = (const char *) LV2_ATOM_BODY_CONST (kit_path);
+
   if (strlen (filename))
     {
+      GFileInfo *info;
       GFile *kit_file = g_file_new_for_path (filename);
+      info = g_file_query_info (kit_file,
+                                G_FILE_ATTRIBUTE_STANDARD_DISPLAY_NAME,
+                                G_FILE_QUERY_INFO_NONE,
+                                NULL,
+                                NULL);
+
       gtk_file_chooser_select_file (GTK_FILE_CHOOSER (ui->button), kit_file,
                                     NULL);
+
+      if (info)
+        {
+          gtk_statusbar_remove_all (statusbar, context_id);
+          gtk_statusbar_push (statusbar, context_id,
+                              g_file_info_get_display_name (info));
+          g_object_unref (info);
+        }
+
       g_object_unref (kit_file);
       clear_drum_controls (ui);
     }
@@ -287,21 +394,22 @@ on_drum_loaded (IndiePocketUI *ui, const LV2_Atom_Object *obj)
       return;
     }
 
-  GObject *name_label = gtk_builder_get_object (builder, "name-label");
+  GtkLabel *name_label;
+  name_label = GTK_LABEL (gtk_builder_get_object (builder, "name-label"));
   if (strlen (name))
-    gtk_label_set_label (GTK_LABEL (name_label), name);
+    gtk_label_set_label (name_label, name);
   else
     {
       char *anon = g_strdup_printf ("Drum #%d", index);
-      gtk_label_set_label (GTK_LABEL (name_label), anon);
+      gtk_label_set_label (name_label, anon);
       g_free (anon);
     }
 
   DrumProperty props[] = {
-    {"tune-dial", ui->uris.pckt_tuning, index},
-    {"damp-dial", ui->uris.pckt_dampening, index},
-    {"expr-dial", ui->uris.pckt_expression, index},
-    {"olap-dial", ui->uris.pckt_overlap, index}
+    {"tune-dial", ui->uris.pckt_tuning, index, name_label, NULL},
+    {"damp-dial", ui->uris.pckt_dampening, index, name_label, NULL},
+    {"expr-dial", ui->uris.pckt_expression, index, name_label, NULL},
+    {"olap-dial", ui->uris.pckt_overlap, index, name_label, NULL}
   };
 
   for (uint8_t i = 0; i < 4; ++i)
@@ -312,12 +420,17 @@ on_drum_loaded (IndiePocketUI *ui, const LV2_Atom_Object *obj)
 
       DrumProperty *prop = malloc (sizeof (DrumProperty));
       memcpy (prop, props + i, sizeof (DrumProperty));
+      prop->dial = PCKT_GTK_DIAL (dial);
       g_object_set_data_full (G_OBJECT (dial),
                               DRUM_PROPERTY_KEY, prop,
                               (GDestroyNotify) free);
 
       g_signal_connect (dial, "value-changed",
                         G_CALLBACK (on_drum_prop_changed), ui);
+      g_signal_connect (dial, "enter-notify-event",
+                        G_CALLBACK (on_drum_prop_mouseover), ui);
+      g_signal_connect (dial, "leave-notify-event",
+                        G_CALLBACK (on_drum_prop_mouseout), ui);
     }
 
   GtkWidget *root = GTK_WIDGET (gtk_builder_get_object (builder, "root"));
