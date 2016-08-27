@@ -39,6 +39,9 @@
               <!-- ##### MAIN CONTROLS AREA ##### -->
               <object class="GtkNotebook" id="notebook">
                 <property name="visible">True</property>
+                <property name="homogeneous">True</property>
+                <property name="tab-hborder">20</property>
+                <property name="tab-vborder">5</property>
                 <child>
 
                   <object class="GtkScrolledWindow" id="drum-window">
@@ -100,7 +103,7 @@
                                 <child>
                                   <object class="GtkLabel" id="drum-header-olap">
                                     <property name="visible">True</property>
-                                    <property name="label" translatable="yes">Overlap</property>
+                                    <property name="label" translatable="yes">Sample Overlap</property>
                                     <property name="ypad">5</property>
                                   </object>
                                   <packing>
@@ -147,6 +150,103 @@
                     <property name="label" translatable="yes">Drums</property>
                   </object>
                 </child>
+
+                <child>
+                  <object class="GtkHBox" id="about-tab">
+                    <property name="visible">True</property>
+                    <property name="border-width">10</property>
+                    <property name="spacing">10</property>
+                    <child>
+                      <object class="GtkVBox" id="about-keys">
+                        <property name="name">about-keys</property>
+                        <property name="visible">True</property>
+                        <child>
+                          <object class="GtkLabel" id="about-key-author">
+                            <property name="visible">True</property>
+                            <property name="xalign">1</property>
+                            <property name="label" translatable="yes">Author</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">False</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="about-key-license">
+                            <property name="visible">True</property>
+                            <property name="xalign">1</property>
+                            <property name="label" translatable="yes">License</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">False</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="about-key-website">
+                            <property name="visible">True</property>
+                            <property name="xalign">1</property>
+                            <property name="label" translatable="yes">Website</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">False</property>
+                          </packing>
+                        </child>
+                      </object>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="fill">False</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkVBox" id="about-values">
+                        <property name="name">about-values</property>
+                        <property name="visible">True</property>
+                        <child>
+                          <object class="GtkLabel" id="about-value-author">
+                            <property name="visible">True</property>
+                            <property name="xalign">0</property>
+                            <property name="label">Henrik Hedelund</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">False</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="about-value-license">
+                            <property name="visible">True</property>
+                            <property name="xalign">0</property>
+                            <property name="label">GNU GPLv3</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">False</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="about-value-website">
+                            <property name="visible">True</property>
+                            <property name="xalign">0</property>
+                            <property name="label">github.com/henkelund/IndiePocket</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">False</property>
+                          </packing>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child type="tab">
+                  <object class="GtkLabel" id="about-tab-label">
+                    <property name="visible">True</property>
+                    <property name="label" translatable="yes">About</property>
+                  </object>
+                </child>
+
                 <child type="action-end">
                   <object class="GtkLabel" id="version-label">
                     <property name="name">version-label</property>
