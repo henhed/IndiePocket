@@ -104,6 +104,30 @@ pckt_kit_get_drum_meta (const PcktKit *kit, int8_t index)
   return NULL;
 }
 
+PcktDrumMeta *
+pckt_kit_next_drum_meta (const PcktKit *kit, const PcktDrumMeta *prev)
+{
+  if (!kit)
+    return NULL;
+
+  PcktDrumMeta *next = NULL;
+
+  for (int8_t i = 0, j = MAX_NUM_DRUMS - 1; j >= 0; ++i, --j)
+    {
+      if (!kit->drum_metas[i])
+        continue;
+      else if (!prev)
+        {
+          next = kit->drum_metas[i];
+          break;
+        }
+      else if (prev == kit->drum_metas[i])
+        prev = NULL;
+    }
+
+  return next;
+}
+
 bool
 pckt_kit_set_choke (PcktKit *kit, int8_t choker, int8_t chokee, bool choke)
 {

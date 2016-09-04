@@ -20,25 +20,41 @@
 
 #include "pckt.h"
 #include "kit.h"
+#include "drum.h"
 
 __BEGIN_DECLS
 
 typedef struct PcktKitFactoryImpl PcktKitFactory;
 
+typedef const void * (*PcktKitFactoryDrumMetaCb) (PcktKitFactory *,
+                                                  PcktDrumMeta *,
+                                                  const void *);
+typedef void (*PcktKitFactoryDrumCb) (void *, PcktDrum *, int8_t,
+                                      const int8_t *, size_t);
+
 typedef struct _PcktKitParserIface PcktKitParserIface;
 struct _PcktKitParserIface {
-  PcktKit * (*load) (PcktKitParserIface *, const PcktKitFactory *);
+  PcktStatus (*load_metas) (PcktKitParserIface *, PcktKitFactory *,
+                            PcktKitFactoryDrumMetaCb);
+  PcktStatus (*load_drums) (PcktKitParserIface *, PcktDrumMeta *, const void *,
+                            PcktKitFactoryDrumCb, void *);
   void (*free) (PcktKitParserIface *, const PcktKitFactory *);
 };
 typedef PcktKitParserIface * (*PcktKitParserCtor) (const PcktKitFactory *);
 
 extern PcktKitFactory *pckt_kit_factory_new (const char *, PcktStatus *);
 extern void pckt_kit_factory_free (PcktKitFactory *);
-extern PcktKit *pckt_kit_factory_load (const PcktKitFactory *);
+
+extern PcktStatus pckt_kit_factory_load_metas (PcktKitFactory *, PcktKit *);
+extern PcktStatus pckt_kit_factory_load_drums (PcktKitFactory *, PcktDrumMeta *,
+                                               PcktKitFactoryDrumCb, void *);
+
+extern PcktKit *pckt_kit_factory_load (PcktKitFactory *);
 
 extern const char *pckt_kit_factory_get_filename (const PcktKitFactory *);
 extern const char *pckt_kit_factory_get_basedir (const PcktKitFactory *);
-extern char *pckt_kit_factory_get_abspath (const PcktKitFactory *, const char *);
+extern char *pckt_kit_factory_get_abspath (const PcktKitFactory *,
+                                           const char *);
 
 __END_DECLS
 

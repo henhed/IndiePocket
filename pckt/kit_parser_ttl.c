@@ -51,7 +51,7 @@
 
 typedef struct {
   PcktKitParserIface iface;
-  const PcktKitFactory *factory;
+  PcktKitFactory *factory;
   SordWorld *world;
   SordModel *model;
   struct {
@@ -343,6 +343,41 @@ load_drum_hit (const TurtleParser *parser, const SordNode *hit_node)
   return drum;
 }
 
+static inline void
+get_drum_hit_chokers (const TurtleParser *parser, const SordNode *hit_node,
+                      int8_t **chokers, size_t *nchokers)
+{
+  SordIter *it;
+  int64_t nnodes = sord_count (parser->model, hit_node,
+                               parser->uris.prop_choke, NULL, NULL);
+
+  *nchokers = 0;
+
+  if (nnodes <= 0)
+    return;
+
+  it = sord_search (parser->model, hit_node, parser->uris.prop_choke,
+                    NULL, NULL);
+  if (!it)
+    return;
+
+  *chokers = calloc (nnodes, sizeof (int8_t));
+  if (!*chokers)
+    {
+      sord_iter_free (it);
+      return;
+    }
+
+  for (; !sord_iter_end (it); sord_iter_next (it))
+    {
+      const SordNode *choke_node = sord_iter_get_node (it, SORD_OBJECT);
+      if (node_is_int (choke_node))
+        (*chokers)[(*nchokers)++] = node_to_int (choke_node);
+    }
+
+  sord_iter_free (it);
+}
+
 static inline int8_t
 get_drum_id (const TurtleParser *parser, const SordNode *drum_node)
 {
@@ -362,89 +397,28 @@ get_drum_id (const TurtleParser *parser, const SordNode *drum_node)
   return id;
 }
 
-static inline void
-load_kit_chokes (const TurtleParser *parser, PcktKit *kit, int8_t id,
-                 const SordNode *drum_node)
+static PcktStatus
+ttl_parser_load_metas (PcktKitParserIface *iface, PcktKitFactory *factory,
+                       PcktKitFactoryDrumMetaCb callback)
 {
-  SordIter *it = sord_search (parser->model, drum_node,
-                              parser->uris.prop_choke, NULL, NULL);
-  if (it)
+  TurtleParser *parser = (TurtleParser *) iface;
+  SordIter *drum_it;
+  SordNode *kit_node = sord_get (parser->model, NULL, parser->uris.prop_type,
+                                 parser->uris.class_kit, NULL);
+  if (!kit_node)
+    return PCKTE_INTERNAL;
+
+  drum_it = sord_search (parser->model, NULL, parser->uris.prop_kit,
+                         kit_node, NULL);
+  sord_node_free (parser->world, kit_node);
+  kit_node = NULL;
+
+  if (!drum_it)
+    return PCKTE_INTERNAL;
+
+  for (; !sord_iter_end (drum_it); sord_iter_next (drum_it))
     {
-      for (; !sord_iter_end (it); sord_iter_next (it))
-        {
-          const SordNode *choke_node = sord_iter_get_node (it, SORD_OBJECT);
-          if (node_is_int (choke_node))
-            pckt_kit_set_choke (kit, node_to_int (choke_node), id, true);
-        }
-      sord_iter_free (it);
-    }
-}
-
-static inline void
-load_drum (const TurtleParser *parser, PcktKit *kit,
-           const SordNode *drum_node)
-{
-  SordIter *it = sord_search (parser->model, NULL, parser->uris.prop_drum,
-                              drum_node, NULL);
-  if (!it)
-    return;
-
-  SordNode *name_node = sord_get (parser->model, drum_node,
-                                  parser->uris.prop_name, NULL, NULL);
-  const char *name = (name_node
-                      ? (const char *) sord_node_get_string (name_node)
-                      : NULL);
-  PcktDrumMeta *meta = pckt_drum_meta_new (name);
-  if (name_node)
-    sord_node_free (parser->world, name_node);
-
-  if (!meta || pckt_kit_add_drum_meta (kit, meta) < 0)
-    {
-      if (meta)
-        pckt_drum_meta_free (meta);
-      return;
-    }
-
-  for (; !sord_iter_end (it); sord_iter_next (it))
-    {
-      const SordNode *hit_node = sord_iter_get_node (it, SORD_SUBJECT);
-      SordQuad pat = {
-        hit_node,
-        parser->uris.prop_type,
-        parser->uris.class_drum_hit,
-        NULL
-      };
-      if (!sord_contains (parser->model, pat))
-        continue;
-
-      int8_t id = get_drum_id (parser, hit_node);
-      if (id < 0 || pckt_kit_get_drum (kit, id))
-        continue; /* Invalid or occupied ID.  */
-
-      PcktDrum *drum = load_drum_hit (parser, hit_node);
-      if (drum)
-        {
-          pckt_drum_set_meta (drum, meta);
-          pckt_kit_add_drum (kit, drum, id);
-          load_kit_chokes (parser, kit, id, hit_node);
-        }
-    }
-
-  sord_iter_free (it);
-}
-
-static PcktKit *
-load_kit (const TurtleParser *parser, const SordNode *kit_node)
-{
-  PcktKit *kit = pckt_kit_new ();
-  SordIter *it = sord_search (parser->model, NULL, parser->uris.prop_kit,
-                              kit_node, NULL);
-  if (!it)
-    return kit; /* No drums found.  */
-
-  for (; !sord_iter_end (it); sord_iter_next (it))
-    {
-      const SordNode *drum_node = sord_iter_get_node (it, SORD_SUBJECT);
+      const SordNode *drum_node = sord_iter_get_node (drum_it, SORD_SUBJECT);
       SordQuad pat = {
         drum_node,
         parser->uris.prop_type,
@@ -452,32 +426,85 @@ load_kit (const TurtleParser *parser, const SordNode *kit_node)
         NULL
       };
       if (sord_contains (parser->model, pat))
-        load_drum (parser, kit, drum_node);
-    }
-  sord_iter_free (it);
+        {
+          PcktDrumMeta *meta;
+          SordNode *name_node;
+          const char *name;
 
-  return kit;
+          name_node = sord_get (parser->model, drum_node,
+                                parser->uris.prop_name, NULL, NULL);
+          name = (name_node
+                  ? (const char *) sord_node_get_string (name_node)
+                  : NULL);
+          meta = pckt_drum_meta_new (name);
+
+          if (name_node)
+            sord_node_free (parser->world, name_node);
+
+          if (meta)
+            callback (factory, meta, drum_node);
+          else
+            {
+              sord_iter_free (drum_it);
+              return PCKTE_NOMEM;
+            }
+        }
+    }
+  sord_iter_free (drum_it);
+
+  return PCKTE_SUCCESS;
 }
 
-static PcktKit *
-ttl_parser_load (PcktKitParserIface *iface, const PcktKitFactory *factory)
+PcktStatus
+ttl_parser_load_drums (PcktKitParserIface *iface, PcktDrumMeta *meta,
+                       const void *handle, PcktKitFactoryDrumCb callback,
+                       void *user_handle)
 {
-  (void) factory;
-
-  PcktKit *kit = NULL;
-  if (!iface)
-    return kit;
-
   TurtleParser *parser = (TurtleParser *) iface;
-  SordNode *kit_node = sord_get (parser->model, NULL, parser->uris.prop_type,
-                                 parser->uris.class_kit, NULL);
-  if (kit_node)
+  const SordNode *drum_node = (const SordNode *) handle;
+  SordIter *it = sord_search (parser->model, NULL, parser->uris.prop_drum,
+                              drum_node, NULL);
+  if (!it)
+    return PCKTE_INTERNAL;
+
+  for (; !sord_iter_end (it); sord_iter_next (it))
     {
-      kit = load_kit (parser, kit_node);
-      sord_node_free (parser->world, kit_node);
+      int8_t id;
+      PcktDrum *drum;
+      const SordNode *hit_node = sord_iter_get_node (it, SORD_SUBJECT);
+      SordQuad pat = {
+        hit_node,
+        parser->uris.prop_type,
+        parser->uris.class_drum_hit,
+        NULL
+      };
+
+      if (!sord_contains (parser->model, pat))
+        continue;
+
+      id = get_drum_id (parser, hit_node);
+      if (id < 0)
+        continue;
+
+      drum = load_drum_hit (parser, hit_node);
+      if (drum)
+        {
+          int8_t *chokers = NULL;
+          size_t nchokers = 0;
+
+          get_drum_hit_chokers (parser, hit_node, &chokers, &nchokers);
+
+          pckt_drum_set_meta (drum, meta);
+          callback (user_handle, drum, id, chokers, nchokers);
+
+          if (chokers)
+            free (chokers);
+        }
     }
 
-  return kit;
+  sord_iter_free (it);
+
+  return PCKTE_SUCCESS;
 }
 
 static void
@@ -495,7 +522,7 @@ ttl_parser_free (PcktKitParserIface *iface, const PcktKitFactory *factory)
 }
 
 PcktKitParserIface *
-pckt_kit_parser_ttl_new (const PcktKitFactory *factory)
+pckt_kit_parser_ttl_new (PcktKitFactory *factory)
 {
   TurtleParser *parser;
   PcktKitParserIface *iface;
@@ -511,7 +538,8 @@ pckt_kit_parser_ttl_new (const PcktKitFactory *factory)
   memset (parser, 0, sizeof (TurtleParser));
 
   iface = (PcktKitParserIface *) parser;
-  iface->load = ttl_parser_load;
+  iface->load_metas = ttl_parser_load_metas;
+  iface->load_drums = ttl_parser_load_drums;
   iface->free = ttl_parser_free;
 
   parser->factory = factory;

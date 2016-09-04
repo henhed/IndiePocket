@@ -528,83 +528,94 @@ load_drum_hit (const BfkParser *parser, const BfkDrumInfo *info,
 }
 
 static inline void
-load_drum (const BfkParser *parser, PcktKit *kit, const BfkDrumInfo *info)
+get_drum_hit_chokers (const BfkDrumHit *hit, int8_t **chokers, size_t *nchokers)
 {
-  PcktDrumMeta *meta = pckt_drum_meta_new (info->name);
-  if (!meta)
+  *nchokers = 0;
+  *chokers = calloc (5, sizeof (int8_t));
+
+  if (!*chokers)
     return;
 
-  if (pckt_kit_add_drum_meta (kit, meta) < 0)
+  switch (hit->id)
     {
-      pckt_drum_meta_free (meta);
-      return;
+    case BFK_HIHAT_OPEN_TIP:
+      (*chokers)[(*nchokers)++] = drum_hit_info[BFK_HIHAT_HALF_TIP].midi_key;
+      (*chokers)[(*nchokers)++] = drum_hit_info[BFK_HIHAT_HALF_SHANK].midi_key;
+      /* break intentially omitted.  */
+
+    case BFK_HIHAT_HALF_TIP:
+    case BFK_HIHAT_HALF_SHANK:
+      (*chokers)[(*nchokers)++] = drum_hit_info[BFK_HIHAT_CLOSED_TIP].midi_key;
+      (*chokers)[(*nchokers)++] = drum_hit_info[BFK_HIHAT_CLOSED_SHANK].midi_key;
+      (*chokers)[(*nchokers)++] = drum_hit_info[BFK_HIHAT_PEDAL].midi_key;
+      break;
+
+    default:
+      if (hit->gate_key >= 0)
+        (*chokers)[(*nchokers)++] = hit->gate_key;
+      break;
     }
+
+  if (*nchokers == 0)
+    {
+      free (*chokers);
+      *chokers = NULL;
+    }
+}
+
+static PcktStatus
+bfk_parser_load_metas (PcktKitParserIface *iface, PcktKitFactory *factory,
+                       PcktKitFactoryDrumMetaCb callback)
+{
+  BfkParser *parser = (BfkParser *) iface;
+
+  for (BfkDrumType t = 0; t < BFK_NUM_TYPES; ++t)
+    {
+      BfkDrumInfo *info = &parser->drums[t];
+      if (info->path)
+        {
+          PcktDrumMeta *meta = pckt_drum_meta_new (info->name);
+          if (meta)
+            callback (factory, meta, info);
+        }
+    }
+
+  return PCKTE_SUCCESS;
+}
+
+PcktStatus
+bfk_parser_load_drums (PcktKitParserIface *iface, PcktDrumMeta *meta,
+                       const void *handle, PcktKitFactoryDrumCb callback,
+                       void *user_handle)
+{
+  BfkParser *parser = (BfkParser *) iface;
+  const BfkDrumInfo *info = (const BfkDrumInfo *) handle;
 
   for (uint8_t i = 0; i < BFK_NUM_HIT_TYPES; ++i)
     {
       const BfkDrumHit *hit = &drum_hit_info[i];
       if (hit->drum == info->keys->id)
         {
-          if (pckt_kit_get_drum (kit, hit->midi_key))
-            continue; /* Invalid or occupied ID.  */
-
           PcktDrum *drum = load_drum_hit (parser, info, hit);
           if (drum)
             {
-              int8_t gate;
+              int8_t *chokers = NULL;
+              size_t nchokers = 0;
+
+              get_drum_hit_chokers (hit, &chokers, &nchokers);
 
               pckt_drum_set_meta (drum, meta);
               pckt_drum_normalize (drum);
-              pckt_kit_add_drum (kit, drum, hit->midi_key);
 
-              switch (hit->id)
-                {
-                case BFK_HIHAT_OPEN_TIP:
-                  gate = drum_hit_info[BFK_HIHAT_HALF_TIP].midi_key;
-                  pckt_kit_set_choke (kit, gate, hit->midi_key, true);
-                  gate = drum_hit_info[BFK_HIHAT_HALF_SHANK].midi_key;
-                  pckt_kit_set_choke (kit, gate, hit->midi_key, true);
-                  /* break intentially omitted.  */
+              callback (user_handle, drum, hit->midi_key, chokers, nchokers);
 
-                case BFK_HIHAT_HALF_TIP:
-                case BFK_HIHAT_HALF_SHANK:
-                  gate = drum_hit_info[BFK_HIHAT_CLOSED_TIP].midi_key;
-                  pckt_kit_set_choke (kit, gate, hit->midi_key, true);
-                  gate = drum_hit_info[BFK_HIHAT_CLOSED_SHANK].midi_key;
-                  pckt_kit_set_choke (kit, gate, hit->midi_key, true);
-                  gate = drum_hit_info[BFK_HIHAT_PEDAL].midi_key;
-                  pckt_kit_set_choke (kit, gate, hit->midi_key, true);
-                  break;
-
-                default:
-                  if (hit->gate_key >= 0)
-                    pckt_kit_set_choke (kit, hit->gate_key, hit->midi_key,
-                                        true);
-                  break;
-                }
+              if (chokers)
+                free (chokers);
             }
         }
     }
-}
 
-static PcktKit *
-bfk_parser_load (PcktKitParserIface *iface, const PcktKitFactory *factory)
-{
-  PcktKit *kit = NULL;
-  BfkParser *parser = (BfkParser *) iface;
-  if (!parser || (factory != parser->factory))
-    return NULL;
-
-  kit = pckt_kit_new ();
-
-  for (BfkDrumType t = 0; t < BFK_NUM_TYPES; ++t)
-    {
-      BfkDrumInfo *info = &parser->drums[t];
-      if (info->path)
-        load_drum (parser, kit, info);
-    }
-
-  return kit;
+  return PCKTE_SUCCESS;
 }
 
 static void
@@ -644,7 +655,8 @@ pckt_kit_parser_bfk_new (const PcktKitFactory *factory)
   memset (parser, 0, sizeof (BfkParser));
 
   iface = (PcktKitParserIface *) parser;
-  iface->load = bfk_parser_load;
+  iface->load_metas = bfk_parser_load_metas;
+  iface->load_drums = bfk_parser_load_drums;
   iface->free = bfk_parser_free;
 
   parser->factory = factory;

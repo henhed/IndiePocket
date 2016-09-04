@@ -40,7 +40,8 @@ typedef enum {
   PCKTE_SUCCESS = 0,
   PCKTE_GENERAL,
   PCKTE_NOMEM,
-  PCKTE_INVAL
+  PCKTE_INVAL,
+  PCKTE_INTERNAL
 } PcktStatus;
 
 static inline const char *
@@ -56,6 +57,8 @@ pckt_strerror (PcktStatus status)
       return "Out of memory";
     case PCKTE_INVAL:
       return "Invalid argument";
+    case PCKTE_INTERNAL:
+      return "Internal error";
     default:
       return "Unknown error";
     }

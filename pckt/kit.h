@@ -23,6 +23,11 @@
 #include "drum.h"
 #include "sound.h"
 
+#define PCKT_KIT_EACH_DRUM_META(kit, iter)                              \
+  for (PcktDrumMeta *(iter) = pckt_kit_next_drum_meta ((kit), NULL);    \
+       (iter) != NULL;                                                  \
+       (iter) = pckt_kit_next_drum_meta ((kit), (iter)))
+
 __BEGIN_DECLS
 
 typedef struct PcktKitImpl PcktKit;
@@ -33,6 +38,8 @@ extern int8_t pckt_kit_add_drum (PcktKit *, PcktDrum *, int8_t);
 extern PcktDrum *pckt_kit_get_drum (const PcktKit *, int8_t);
 extern int8_t pckt_kit_add_drum_meta (PcktKit *, PcktDrumMeta *);
 extern PcktDrumMeta *pckt_kit_get_drum_meta (const PcktKit *, int8_t);
+extern PcktDrumMeta *pckt_kit_next_drum_meta (const PcktKit *,
+                                              const PcktDrumMeta *);
 extern bool pckt_kit_set_choke (PcktKit *, int8_t, int8_t, bool);
 extern bool pckt_kit_choke_by_id (const PcktKit *, PcktSoundPool *, int8_t);
 
