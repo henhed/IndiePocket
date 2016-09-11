@@ -65,6 +65,7 @@ typedef struct {
   LV2_URID patch_subject;
   LV2_URID patch_value;
   LV2_URID pckt_Drum;
+  LV2_URID pckt_DrumMeta;
   LV2_URID pckt_Kit;
   LV2_URID pckt_expression;
   LV2_URID pckt_dampening;
@@ -93,6 +94,7 @@ ipio_map_uris (IPIOURIs *uris, LV2_URID_Map *map)
   uris->patch_subject = map->map (map->handle, LV2_PATCH__subject);
   uris->patch_value = map->map (map->handle, LV2_PATCH__value);
   uris->pckt_Drum = map->map (map->handle, IPCKT_URI_PREFIX "Drum");
+  uris->pckt_DrumMeta = map->map (map->handle, IPCKT_URI_PREFIX "DrumMeta");
   uris->pckt_Kit = map->map (map->handle, IPCKT_URI_PREFIX "Kit");
   uris->pckt_expression = map->map (map->handle, IPCKT_URI_PREFIX "expression");
   uris->pckt_dampening = map->map (map->handle, IPCKT_URI_PREFIX "dampening");

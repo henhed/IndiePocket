@@ -54,12 +54,31 @@ typedef struct {
   PcktSoundPool *pool;
 } IndiePocket;
 
-/* Internal kit message struct.  */
+/* Internal message structs.  */
 typedef struct {
   LV2_Atom atom;
   PcktKit *kit;
   char *kit_filename;
 } IPcktKitMsg;
+
+typedef struct {
+  LV2_Atom atom;
+  PcktDrum *drum;
+  int8_t id;
+} IPcktDrumMsg;
+
+typedef struct {
+  LV2_Atom atom;
+  PcktDrumMeta *meta;
+  int8_t id;
+} IPcktDrumMetaMsg;
+
+typedef struct {
+  IndiePocket *plugin;
+  LV2_Worker_Respond_Function respond;
+  LV2_Worker_Respond_Handle handle;
+  PcktKit *kit;
+} IPcktDrumLoadedHandle;
 
 /* Set up plugin.  */
 static LV2_Handle
@@ -287,6 +306,32 @@ cleanup (LV2_Handle instance)
   free (plugin);
 }
 
+/* Callback for `pckt_kit_factory_load_drums'.  */
+static void
+on_drum_loaded (void *data, PcktDrum *drum, int8_t id, const int8_t *chokers,
+                size_t nchokers)
+{
+  IPcktDrumLoadedHandle *handle = (IPcktDrumLoadedHandle *) data;
+  IPcktDrumMsg message = {
+    {sizeof (PcktDrum *) + sizeof (int8_t), handle->plugin->uris.pckt_Drum},
+    drum,
+    id
+  };
+
+  if (pckt_kit_get_drum (handle->kit, id))
+    {
+      lv2_log_note (&handle->plugin->logger, "ID %d is occupied\n", id);
+      pckt_drum_free (drum);
+      return;
+    }
+
+  for (uint8_t i = 0; i < nchokers; ++i)
+    pckt_kit_set_choke (handle->kit, chokers[i], id, true);
+
+  /* Tell audio thread to add this drum to current kit.  */
+  handle->respond (handle->handle, sizeof (IPcktDrumMsg), &message);
+}
+
 /* Handle scheduled non-realtime work.  */
 static LV2_Worker_Status
 work (LV2_Handle instance, LV2_Worker_Respond_Function respond,
@@ -302,42 +347,80 @@ work (LV2_Handle instance, LV2_Worker_Respond_Function respond,
       lv2_log_note (&plugin->logger, "Freeing kit %s\n", msg->kit_filename);
       pckt_kit_free (msg->kit);
       free (msg->kit_filename);
+      return LV2_WORKER_SUCCESS;
+    }
+
+  const LV2_Atom_Object *obj = (const LV2_Atom_Object *) data;
+  const LV2_Atom *kit_path = ipio_atom_get_kit_file (&plugin->uris, obj);
+  if (!kit_path)
+    return LV2_WORKER_ERR_UNKNOWN;
+
+  const char *filename = (const char *) LV2_ATOM_BODY_CONST (kit_path);
+  PcktKit *kit = NULL;
+  PcktStatus err = PCKTE_SUCCESS;
+  PcktKitFactory *factory = pckt_kit_factory_new (filename, &err);
+  if (factory)
+    {
+      lv2_log_note (&plugin->logger, "Loading %s\n", filename);
+      kit = pckt_kit_new ();
+      err = pckt_kit_factory_load_metas (factory, kit);
+      if (err != PCKTE_SUCCESS)
+        {
+          pckt_kit_factory_free (factory);
+          pckt_kit_free (kit);
+          factory = NULL;
+          kit = NULL;
+        }
     }
   else
+    lv2_log_error (&plugin->logger, "pckt_kit_factory_new: %s\n",
+                   pckt_strerror (err));
+
+  IPcktKitMsg kit_msg = {
+    {sizeof (PcktKit *) + sizeof (char *), plugin->uris.pckt_Kit},
+    kit,
+    NULL
+  };
+
+  if (kit)
     {
-      const LV2_Atom_Object *obj = (const LV2_Atom_Object *) data;
-      const LV2_Atom *kit_path = ipio_atom_get_kit_file (&plugin->uris, obj);
-      if (!kit_path)
-        return LV2_WORKER_ERR_UNKNOWN;
+      kit_msg.kit_filename = (char *) malloc (strlen (filename) + 1);
+      strcpy (kit_msg.kit_filename, filename);
+    }
+  else
+    lv2_log_error (&plugin->logger, "Failed to load %s\n", filename);
 
-      const char *filename = (const char *) LV2_ATOM_BODY_CONST (kit_path);
-      PcktKit *kit = NULL;
-      PcktStatus err;
-      PcktKitFactory *factory = pckt_kit_factory_new (filename, &err);
-      if (factory)
-        {
-          lv2_log_note (&plugin->logger, "Loading %s\n", filename);
-          kit = pckt_kit_factory_load (factory);
-          pckt_kit_factory_free (factory);
-        }
-      else
-        lv2_log_error (&plugin->logger, "pckt_kit_factory_new: %s\n",
-                       pckt_strerror (err));
+  /* Tell audio thread to use new kit.  */
+  respond (handle, sizeof (IPcktKitMsg), &kit_msg);
 
-      if (!kit)
-        lv2_log_error (&plugin->logger, "Failed to load %s\n", filename);
-
-      IPcktKitMsg msg = {
-        {sizeof (PcktKit *) + sizeof (char *), plugin->uris.pckt_Kit},
-        kit,
-        NULL
+  if (factory)
+    {
+      IPcktDrumLoadedHandle on_load_handle = {
+        plugin, respond, handle, kit
       };
-      if (kit)
+
+      PCKT_KIT_EACH_DRUM_META (kit, meta)
         {
-          msg.kit_filename = (char *) malloc (strlen (filename) + 1);
-          strcpy (msg.kit_filename, filename);
+          IPcktDrumMetaMsg meta_msg = {
+            {
+              sizeof (PcktDrumMeta *) + sizeof (int8_t),
+              plugin->uris.pckt_DrumMeta
+            },
+            meta, pckt_kit_get_drum_meta_id (kit, meta)
+          };
+
+          pckt_kit_factory_load_drums (factory, meta,
+                                       on_drum_loaded,
+                                       &on_load_handle);
+
+          /* Tell audio thread that a meta drum has finsished loading.  */
+          respond (handle, sizeof (IPcktDrumMetaMsg), &meta_msg);
         }
-      respond (handle, sizeof (IPcktKitMsg), &msg);
+
+      /* Send kit message again when all drums are loaded.  */
+      respond (handle, sizeof (IPcktKitMsg), &kit_msg);
+
+      pckt_kit_factory_free (factory);
     }
 
   return LV2_WORKER_SUCCESS;
@@ -349,7 +432,8 @@ write_drum_message (IndiePocket *plugin, int8_t index, PcktDrumMeta *drum)
 {
   LV2_Atom_Forge_Frame frame;
   const char *name = pckt_drum_meta_get_name (drum);
-  ipio_forge_object (&plugin->forge, &frame, plugin->uris.pckt_Drum);
+
+  ipio_forge_object (&plugin->forge, &frame, plugin->uris.pckt_DrumMeta);
   ipio_forge_key (&plugin->forge, plugin->uris.pckt_index);
   lv2_atom_forge_int (&plugin->forge, index);
   ipio_forge_key (&plugin->forge, plugin->uris.doap_name);
@@ -366,47 +450,83 @@ write_drum_message (IndiePocket *plugin, int8_t index, PcktDrumMeta *drum)
 static LV2_Worker_Status
 work_response (LV2_Handle instance, uint32_t size, const void *data)
 {
+  (void) size;
+
   IndiePocket *plugin = (IndiePocket *) instance;
-  if (size != sizeof (IPcktKitMsg))
+  const LV2_Atom *atom = (const LV2_Atom *) data;
+
+  if (atom->type == plugin->uris.pckt_Drum)
+    {
+      const IPcktDrumMsg *msg = (const IPcktDrumMsg *) atom;
+      pckt_kit_add_drum (plugin->kit, msg->drum, msg->id);
+      return LV2_WORKER_SUCCESS;
+    }
+  else if (atom->type == plugin->uris.pckt_DrumMeta)
+    {
+      const IPcktDrumMetaMsg *msg = (const IPcktDrumMetaMsg *) atom;
+      lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
+      write_drum_message (plugin, msg->id, msg->meta);
+      return LV2_WORKER_SUCCESS;
+    }
+  else if (atom->type != plugin->uris.pckt_Kit)
     return LV2_WORKER_ERR_UNKNOWN;
 
-  const IPcktKitMsg *kitmsg_new = (const IPcktKitMsg *) data;
-
-  if (kitmsg_new->kit && plugin->kit)
+  const IPcktKitMsg *kitmsg_new = (const IPcktKitMsg *) atom;
+  if (!kitmsg_new->kit)
     {
-      /* Kill all current sounds since they hold references to samples that
-         will be freed by the kit.  */
-      pckt_soundpool_clear (plugin->pool);
-      /* Tell worker to free the old kit.  */
-      IPcktKitMsg kitmsg_free = {
-        {sizeof (PcktKit *) + sizeof (char *), plugin->uris.pckt_freeKit},
-        plugin->kit,
-        plugin->kit_filename
-      };
-      plugin->schedule->schedule_work (plugin->schedule->handle,
-                                       sizeof (IPcktKitMsg), &kitmsg_free);
+      if (plugin->kit)
+        {
+          /* Remind UI about old kit.  */
+          PCKT_KIT_EACH_DRUM_META (plugin->kit, meta)
+            {
+              lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
+              write_drum_message (plugin,
+                                  pckt_kit_get_drum_meta_id (plugin->kit, meta),
+                                  meta);
+            }
+
+          lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
+          ipio_forge_kit_file_atom (&plugin->forge, &plugin->uris,
+                                    plugin->kit_filename);
+        }
+      else
+        {
+          /* Send empty message if no kit is loaded.  */
+          lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
+          ipio_forge_kit_file_atom (&plugin->forge, &plugin->uris, "");
+        }
+
+      return LV2_WORKER_SUCCESS;
     }
 
-  if (kitmsg_new->kit)
+  if (kitmsg_new->kit == plugin->kit)
     {
+      /* Notify UI that the new kit has finished loading.  */
+      lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
+      ipio_forge_kit_file_atom (&plugin->forge, &plugin->uris,
+                                plugin->kit_filename);
+    }
+  else
+    {
+      if (plugin->kit)
+        {
+          /* Kill all current sounds since they hold references to samples that
+             will be freed by the kit.  */
+          pckt_soundpool_clear (plugin->pool);
+          /* Tell worker to free the old kit.  */
+          IPcktKitMsg kitmsg_free = {
+            {sizeof (PcktKit *) + sizeof (char *), plugin->uris.pckt_freeKit},
+            plugin->kit,
+            plugin->kit_filename
+          };
+          plugin->schedule->schedule_work (plugin->schedule->handle,
+                                           sizeof (IPcktKitMsg), &kitmsg_free);
+        }
+
+      /* Start using new kit.  */
       plugin->kit = kitmsg_new->kit;
       plugin->kit_filename = kitmsg_new->kit_filename;
     }
-
-  lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
-  if (plugin->kit)
-    {
-      ipio_forge_kit_file_atom (&plugin->forge, &plugin->uris,
-                                plugin->kit_filename);
-      PcktDrumMeta *meta;
-      for (int8_t i = 0; (meta = pckt_kit_get_drum_meta (plugin->kit, i)); ++i)
-        {
-          lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
-          write_drum_message (plugin, i, meta);
-        }
-    }
-  else
-    ipio_forge_kit_file_atom (&plugin->forge, &plugin->uris, "");
 
   return LV2_WORKER_SUCCESS;
 }

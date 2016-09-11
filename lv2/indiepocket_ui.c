@@ -71,6 +71,7 @@ on_file_selected (GtkWidget *widget, void *handle)
   char *filename = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER (widget));
 
   gtk_widget_set_sensitive (widget, FALSE);
+  clear_drum_controls (ui);
 
   uint8_t forgebuf[IPIO_FORGE_BUFFER_SIZE];
   lv2_atom_forge_set_buffer (&ui->forge, forgebuf, IPIO_FORGE_BUFFER_SIZE);
@@ -349,7 +350,6 @@ on_kit_loaded (IndiePocketUI *ui, const LV2_Atom_Object *obj)
         }
 
       g_object_unref (kit_file);
-      clear_drum_controls (ui);
     }
   else
     gtk_file_chooser_unselect_all (GTK_FILE_CHOOSER (ui->button));
@@ -464,7 +464,7 @@ port_event (LV2UI_Handle handle, uint32_t port_index, uint32_t buffer_size,
   const LV2_Atom_Object *obj = (const LV2_Atom_Object *) atom;
   if (obj->body.otype == ui->uris.patch_Set)
     on_kit_loaded (ui, obj);
-  else if (obj->body.otype == ui->uris.pckt_Drum)
+  else if (obj->body.otype == ui->uris.pckt_DrumMeta)
     on_drum_loaded (ui, obj);
 }
 

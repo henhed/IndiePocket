@@ -77,6 +77,21 @@ pckt_kit_get_drum (const PcktKit *kit, int8_t id)
 }
 
 int8_t
+pckt_kit_get_drum_meta_id (const PcktKit *kit, const PcktDrumMeta *meta)
+{
+  if (!kit || !meta)
+    return -1;
+
+  for (int8_t i = 0, j = MAX_NUM_DRUMS - 1; j >= 0; ++i, --j)
+    {
+      if (kit->drum_metas[i] == meta)
+        return i;
+    }
+
+  return -1;
+}
+
+int8_t
 pckt_kit_add_drum_meta (PcktKit *kit, PcktDrumMeta *meta)
 {
   if (!kit || !meta)

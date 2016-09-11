@@ -38,6 +38,7 @@ extern int8_t pckt_kit_add_drum (PcktKit *, PcktDrum *, int8_t);
 extern PcktDrum *pckt_kit_get_drum (const PcktKit *, int8_t);
 extern int8_t pckt_kit_add_drum_meta (PcktKit *, PcktDrumMeta *);
 extern PcktDrumMeta *pckt_kit_get_drum_meta (const PcktKit *, int8_t);
+extern int8_t pckt_kit_get_drum_meta_id (const PcktKit *, const PcktDrumMeta *);
 extern PcktDrumMeta *pckt_kit_next_drum_meta (const PcktKit *,
                                               const PcktDrumMeta *);
 extern bool pckt_kit_set_choke (PcktKit *, int8_t, int8_t, bool);
