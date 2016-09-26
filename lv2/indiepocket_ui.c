@@ -284,6 +284,12 @@ instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
         }
     }
 
+  GtkFileFilter *file_filter = gtk_file_filter_new ();
+  gtk_file_filter_set_name (file_filter, "Kits (*.pckt *.bfk)");
+  gtk_file_filter_add_pattern (file_filter, "*.pckt");
+  gtk_file_filter_add_pattern (file_filter, "*.bfk");
+  gtk_file_chooser_add_filter (GTK_FILE_CHOOSER (ui->button), file_filter);
+
 #ifdef PCKT_VERSION
   GtkLabel *version_label;
   version_label = GTK_LABEL (gtk_builder_get_object (builder, "version-label"));
