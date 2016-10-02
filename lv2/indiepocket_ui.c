@@ -61,6 +61,19 @@ typedef struct
 
 #define DRUM_PROPERTY_KEY "drum_property"
 
+/* Convenience macro for writing message to control port.  */
+#define WRITE_CONTROL_MESSAGE(ui, message, _C_)            \
+  do {                                                     \
+    LV2_Atom *message = NULL;                              \
+    uint8_t buffer[IPIO_FORGE_BUFFER_SIZE];                \
+    lv2_atom_forge_set_buffer (&(ui)->forge, buffer,       \
+                               IPIO_FORGE_BUFFER_SIZE);    \
+    {_C_;}                                                 \
+    (ui)->write ((ui)->controller, IPIO_CONTROL,           \
+                 lv2_atom_total_size (message),            \
+                 (ui)->uris.atom_eventTransfer, message);  \
+  } while (0)
+
 static void clear_drum_controls (IndiePocketUI *ui);
 
 /* Load kit button click callback.  */
@@ -73,13 +86,9 @@ on_file_selected (GtkWidget *widget, void *handle)
   gtk_widget_set_sensitive (widget, FALSE);
   clear_drum_controls (ui);
 
-  uint8_t forgebuf[IPIO_FORGE_BUFFER_SIZE];
-  lv2_atom_forge_set_buffer (&ui->forge, forgebuf, IPIO_FORGE_BUFFER_SIZE);
-  LV2_Atom *kitmsg = ipio_forge_kit_file_atom (&ui->forge, &ui->uris,
-                                               filename);
-
-  ui->write (ui->controller, IPIO_CONTROL, lv2_atom_total_size (kitmsg),
-             ui->uris.atom_eventTransfer, kitmsg);
+  WRITE_CONTROL_MESSAGE (ui, msg,
+    msg = ipio_forge_kit_file_atom (&ui->forge, &ui->uris, filename)
+  );
 
   g_free (filename);
 }
@@ -139,13 +148,10 @@ on_drum_prop_changed (GtkRange *range, void *handle)
   if (!prop)
     return;
 
-  uint8_t forgebuf[IPIO_FORGE_BUFFER_SIZE];
-  lv2_atom_forge_set_buffer (&ui->forge, forgebuf, IPIO_FORGE_BUFFER_SIZE);
-  LV2_Atom *msg = ipio_write_drum_property (&ui->forge, &ui->uris, prop->drum,
-                                            prop->uri, value);
-
-  ui->write (ui->controller, IPIO_CONTROL, lv2_atom_total_size (msg),
-             ui->uris.atom_eventTransfer, msg);
+  WRITE_CONTROL_MESSAGE (ui, msg,
+    msg = ipio_write_drum_property (&ui->forge, &ui->uris, prop->drum,
+                                    prop->uri, value)
+  );
 
   show_drum_prop_status (prop, ui);
 }
@@ -289,6 +295,7 @@ instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
   gtk_file_filter_add_pattern (file_filter, "*.pckt");
   gtk_file_filter_add_pattern (file_filter, "*.bfk");
   gtk_file_chooser_add_filter (GTK_FILE_CHOOSER (ui->button), file_filter);
+  g_signal_connect (ui->button, "file-set", G_CALLBACK (on_file_selected), ui);
 
 #ifdef PCKT_VERSION
   GtkLabel *version_label;
@@ -300,7 +307,15 @@ instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
   g_object_ref (G_OBJECT (ui->root));
   g_object_unref (G_OBJECT (builder));
 
-  g_signal_connect (ui->button, "file-set", G_CALLBACK (on_file_selected), ui);
+  /* Ask plugin if there's a kit loaded already.  */
+  WRITE_CONTROL_MESSAGE (ui, msg,
+    LV2_Atom_Forge_Frame frame;
+    msg = (LV2_Atom *) ipio_forge_object (&ui->forge, &frame,
+                                          ui->uris.patch_Get);
+    ipio_forge_key (&ui->forge, ui->uris.patch_property);
+    lv2_atom_forge_urid (&ui->forge, ui->uris.pckt_Kit);
+    lv2_atom_forge_pop (&ui->forge, &frame);
+  );
 
   *widget = ui->root;
 

@@ -147,10 +147,96 @@ activate (LV2_Handle instance)
   (void) plugin;
 }
 
+/* Send drum meta to notification port.  */
+static void
+write_drum_message (IndiePocket *plugin, int8_t index, PcktDrumMeta *drum)
+{
+  LV2_Atom_Forge_Frame frame;
+  const char *name = pckt_drum_meta_get_name (drum);
+
+  ipio_forge_object (&plugin->forge, &frame, plugin->uris.pckt_DrumMeta);
+  ipio_forge_key (&plugin->forge, plugin->uris.pckt_index);
+  lv2_atom_forge_int (&plugin->forge, index);
+  ipio_forge_key (&plugin->forge, plugin->uris.doap_name);
+
+  if (name)
+    lv2_atom_forge_string (&plugin->forge, name, strlen (name));
+  else
+    lv2_atom_forge_string (&plugin->forge, "", 0);
+
+  lv2_atom_forge_pop (&plugin->forge, &frame);
+}
+
+/* Handle incoming patch:Get event in audio thread.  */
+static void
+handle_patch_get (IndiePocket *plugin, uint32_t property,
+                  const LV2_Atom *subject)
+{
+  (void) subject;
+
+  if (!plugin->kit)
+    return;
+
+  if (property == plugin->uris.pckt_Kit)
+    {
+      PCKT_KIT_EACH_DRUM_META (plugin->kit, meta)
+        {
+          lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
+          write_drum_message (plugin,
+                              pckt_kit_get_drum_meta_id (plugin->kit, meta),
+                              meta);
+        }
+
+      lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
+      ipio_forge_kit_file_atom (&plugin->forge, &plugin->uris,
+                                plugin->kit_filename);
+    }
+  else
+    lv2_log_error (&plugin->logger,
+                   "Unknown patch:Get property %u\n", property);
+}
+
+/* Handle incoming patch:Set event in audio thread.  */
+static void
+handle_patch_set (IndiePocket *plugin, uint32_t property,
+                  const LV2_Atom *subject, const LV2_Atom *value,
+                  const LV2_Atom *data)
+{
+  if (property == plugin->uris.pckt_Kit)
+    plugin->schedule->schedule_work (plugin->schedule->handle,
+                                     lv2_atom_total_size (data),
+                                     data);
+  else if (subject && (subject->type == plugin->forge.Int)
+           && value && (value->type == plugin->forge.Float))
+    {
+      int8_t id = ((const LV2_Atom_Int *) subject)->body;
+      float val = ((const LV2_Atom_Float *) value)->body;
+      PcktDrumMeta *meta = pckt_kit_get_drum_meta (plugin->kit, id);
+      if (meta)
+        {
+          if (property == plugin->uris.pckt_tuning)
+            pckt_drum_meta_set_tuning (meta, val);
+          else if (property == plugin->uris.pckt_dampening)
+            pckt_drum_meta_set_dampening (meta, val);
+          else if (property == plugin->uris.pckt_expression)
+            pckt_drum_meta_set_expression (meta, val);
+          else if (property == plugin->uris.pckt_overlap)
+            pckt_drum_meta_set_sample_overlap (meta, val);
+        }
+    }
+  else
+    lv2_log_error (&plugin->logger,
+                   "Unknown patch:Set property %u\n", property);
+}
+
 /* Handle incoming non-midi events in the audio thread.  */
 static inline void
 handle_event (IndiePocket *plugin, LV2_Atom_Event *event)
 {
+  const LV2_Atom_Object *object;
+  const LV2_Atom *subject = NULL, *property = NULL, *value = NULL;
+  uint32_t type, prop_uri;
+
   if (!ipio_atom_type_is_object (&plugin->forge, event->body.type))
     {
       lv2_log_trace (&plugin->logger,
@@ -158,57 +244,38 @@ handle_event (IndiePocket *plugin, LV2_Atom_Event *event)
       return;
     }
 
-  const LV2_Atom_Object *obj = (const LV2_Atom_Object *) &event->body;
-  if (obj->body.otype == plugin->uris.patch_Set)
-    {
-      const LV2_Atom *sub = NULL, *prop = NULL, *val = NULL;
-      lv2_atom_object_get (obj,
-                           plugin->uris.patch_subject, &sub,
-                           plugin->uris.patch_property, &prop,
-                           plugin->uris.patch_value, &val,
-                           0);
-      if (!prop)
-        {
-          lv2_log_error (&plugin->logger, "patch:Set missing property\n");
-          return;
-        }
-      else if (prop->type != plugin->uris.atom_URID)
-        {
-          lv2_log_error (&plugin->logger,
-                         "patch:Set property is not a URID\n");
-          return;
-        }
+  object = (const LV2_Atom_Object *) &event->body;
+  type = object->body.otype;
 
-      const uint32_t key = ((const LV2_Atom_URID *) prop)->body;
-      if (key == plugin->uris.pckt_Kit)
-        plugin->schedule->schedule_work (plugin->schedule->handle,
-                                         lv2_atom_total_size (&event->body),
-                                         &event->body);
-      else if (sub && (sub->type == plugin->forge.Int)
-               && val && (val->type == plugin->forge.Float))
-        {
-          int8_t index = ((const LV2_Atom_Int *) sub)->body;
-          float value = ((const LV2_Atom_Float *) val)->body;
-          PcktDrumMeta *meta = pckt_kit_get_drum_meta (plugin->kit, index);
-          if (meta)
-            {
-              if (key == plugin->uris.pckt_tuning)
-                pckt_drum_meta_set_tuning (meta, value);
-              else if (key == plugin->uris.pckt_dampening)
-                pckt_drum_meta_set_dampening (meta, value);
-              else if (key == plugin->uris.pckt_expression)
-                pckt_drum_meta_set_expression (meta, value);
-              else if (key == plugin->uris.pckt_overlap)
-                pckt_drum_meta_set_sample_overlap (meta, value);
-            }
-        }
-      else
-        lv2_log_error (&plugin->logger,
-                       "Unknown patch:Set property %u\n", key);
+  if ((type != plugin->uris.patch_Get) && (type != plugin->uris.patch_Set))
+    {
+      lv2_log_trace (&plugin->logger, "Unknown object type %d\n", type);
+      return;
     }
+
+  lv2_atom_object_get (object,
+                       plugin->uris.patch_subject, &subject,
+                       plugin->uris.patch_property, &property,
+                       plugin->uris.patch_value, &value,
+                       0);
+
+  if (!property)
+    {
+      lv2_log_error (&plugin->logger, "Patch message missing property\n");
+      return;
+    }
+  else if (property->type != plugin->uris.atom_URID)
+    {
+      lv2_log_error (&plugin->logger, "Patch message property is not a URID\n");
+      return;
+    }
+
+  prop_uri = ((const LV2_Atom_URID *) property)->body;
+
+  if (type == plugin->uris.patch_Get)
+    handle_patch_get (plugin, prop_uri, subject);
   else
-    lv2_log_trace (&plugin->logger,
-                   "Unknown object type %d\n", obj->body.otype);
+    handle_patch_set (plugin, prop_uri, subject, value, &event->body);
 }
 
 /* Generate NFRAMES frames starting at OFFSET in plugin ouput.  */
@@ -424,26 +491,6 @@ work (LV2_Handle instance, LV2_Worker_Respond_Function respond,
     }
 
   return LV2_WORKER_SUCCESS;
-}
-
-/* Send drum meta to notification port.  */
-static inline void
-write_drum_message (IndiePocket *plugin, int8_t index, PcktDrumMeta *drum)
-{
-  LV2_Atom_Forge_Frame frame;
-  const char *name = pckt_drum_meta_get_name (drum);
-
-  ipio_forge_object (&plugin->forge, &frame, plugin->uris.pckt_DrumMeta);
-  ipio_forge_key (&plugin->forge, plugin->uris.pckt_index);
-  lv2_atom_forge_int (&plugin->forge, index);
-  ipio_forge_key (&plugin->forge, plugin->uris.doap_name);
-
-  if (name)
-    lv2_atom_forge_string (&plugin->forge, name, strlen (name));
-  else
-    lv2_atom_forge_string (&plugin->forge, "", 0);
-
-  lv2_atom_forge_pop (&plugin->forge, &frame);
 }
 
 /* Apply `work' result in audio thread.  */
