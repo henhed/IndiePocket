@@ -8,6 +8,7 @@
 @prefix pg:    <http://lv2plug.in/ns/ext/port-groups#> .
 @prefix work:  <http://lv2plug.in/ns/ext/worker#> .
 @prefix patch: <http://lv2plug.in/ns/ext/patch#> .
+@prefix rsz: <http://lv2plug.in/ns/ext/resize-port#> .
 @prefix pckt:  <http://www.henhed.se/lv2/indiepocket#> .
 
 <http://www.henhed.se/about#me>
@@ -150,6 +151,7 @@ pckt:OutputGroup
         atom:bufferType atom:Sequence ;
         atom:supports midi:MidiEvent ,
             patch:Message ;
+        rsz:minimumSize 1048576 ;
         lv2:designation lv2:control ;
         lv2:index 16 ;
         lv2:symbol "CONTROL" ;
@@ -159,6 +161,7 @@ pckt:OutputGroup
             atom:AtomPort ;
         atom:bufferType atom:Sequence ;
         atom:supports patch:Message ;
+        rsz:minimumSize 1048576 ;
         lv2:designation lv2:control ;
         lv2:index 17 ;
         lv2:symbol "NOTIFY" ;

@@ -172,8 +172,6 @@ static void
 handle_patch_get (IndiePocket *plugin, uint32_t property,
                   const LV2_Atom *subject)
 {
-  (void) subject;
-
   if (!plugin->kit)
     return;
 
@@ -190,6 +188,29 @@ handle_patch_get (IndiePocket *plugin, uint32_t property,
       lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
       ipio_forge_kit_file_atom (&plugin->forge, &plugin->uris,
                                 plugin->kit_filename);
+    }
+  else if (subject && (subject->type == plugin->forge.Int))
+    {
+      int8_t id = ((const LV2_Atom_Int *) subject)->body;
+      PcktDrumMeta *meta = pckt_kit_get_drum_meta (plugin->kit, id);
+      if (meta)
+        {
+          float value = 0;
+          if (property == plugin->uris.pckt_tuning)
+            value = pckt_drum_meta_get_tuning (meta);
+          else if (property == plugin->uris.pckt_dampening)
+            value = pckt_drum_meta_get_dampening (meta);
+          else if (property == plugin->uris.pckt_expression)
+            value = pckt_drum_meta_get_expression (meta);
+          else if (property == plugin->uris.pckt_overlap)
+            value = pckt_drum_meta_get_sample_overlap (meta);
+
+          lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
+          ipio_write_drum_property (&plugin->forge, &plugin->uris, id,
+                                    property, value);
+        }
+      else
+        lv2_log_error (&plugin->logger, "Unknown drum #%d\n", id);
     }
   else
     lv2_log_error (&plugin->logger,

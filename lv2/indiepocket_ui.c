@@ -32,6 +32,8 @@
 #include "indiepocket_io.h"
 #include "../pckt/gtk2/dial.h"
 
+typedef struct DrumPropertyImpl DrumProperty;
+
 typedef struct
 {
   LV2_Atom_Forge forge;
@@ -44,16 +46,18 @@ typedef struct
   GtkWidget *button;
   GtkWidget *statusbar;
   gchar *drum_template;
+  DrumProperty *drum_props;
 } IndiePocketUI;
 
-typedef struct
+struct DrumPropertyImpl
 {
   const char *widget_id;
   LV2_URID uri;
   int8_t drum;
   GtkLabel *label;
   PcktGtkDial *dial;
-} DrumProperty;
+  DrumProperty *next;
+};
 
 #ifndef PATH_MAX
 # define PATH_MAX 4096
@@ -73,6 +77,16 @@ typedef struct
                  lv2_atom_total_size (message),            \
                  (ui)->uris.atom_eventTransfer, message);  \
   } while (0)
+
+/* Convenience macro for writing object to control port.  */
+#define WRITE_CONTROL_OBJECT(ui, uri, _C_)                          \
+  WRITE_CONTROL_MESSAGE ((ui), message,                             \
+    LV2_Atom_Forge_Frame frame;                                     \
+    message = (LV2_Atom *) ipio_forge_object (&(ui)->forge, &frame, \
+                                              (ui)->uris.uri);      \
+    {_C_;}                                                          \
+    lv2_atom_forge_pop (&(ui)->forge, &frame);                      \
+  )
 
 static void clear_drum_controls (IndiePocketUI *ui);
 
@@ -216,6 +230,7 @@ instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
   ui->button = NULL;
   ui->statusbar = NULL;
   ui->drum_template = NULL;
+  ui->drum_props = NULL;
 
   *widget = NULL;
 
@@ -308,13 +323,9 @@ instantiate (const LV2UI_Descriptor *descriptor, const char *plugin_uri,
   g_object_unref (G_OBJECT (builder));
 
   /* Ask plugin if there's a kit loaded already.  */
-  WRITE_CONTROL_MESSAGE (ui, msg,
-    LV2_Atom_Forge_Frame frame;
-    msg = (LV2_Atom *) ipio_forge_object (&ui->forge, &frame,
-                                          ui->uris.patch_Get);
+  WRITE_CONTROL_OBJECT (ui, patch_Get,
     ipio_forge_key (&ui->forge, ui->uris.patch_property);
     lv2_atom_forge_urid (&ui->forge, ui->uris.pckt_Kit);
-    lv2_atom_forge_pop (&ui->forge, &frame);
   );
 
   *widget = ui->root;
@@ -383,6 +394,7 @@ static void
 clear_drum_controls (IndiePocketUI *ui)
 {
   GList *children, *it;
+  ui->drum_props = NULL;
   children = gtk_container_get_children (GTK_CONTAINER (ui->drum_controls));
   for (it = children; it != NULL; it = g_list_next (it))
     gtk_widget_destroy (GTK_WIDGET (it->data));
@@ -427,10 +439,10 @@ on_drum_loaded (IndiePocketUI *ui, const LV2_Atom_Object *obj)
     }
 
   DrumProperty props[] = {
-    {"tune-dial", ui->uris.pckt_tuning, index, name_label, NULL},
-    {"damp-dial", ui->uris.pckt_dampening, index, name_label, NULL},
-    {"expr-dial", ui->uris.pckt_expression, index, name_label, NULL},
-    {"olap-dial", ui->uris.pckt_overlap, index, name_label, NULL}
+    {"tune-dial", ui->uris.pckt_tuning, index, name_label, NULL, NULL},
+    {"damp-dial", ui->uris.pckt_dampening, index, name_label, NULL, NULL},
+    {"expr-dial", ui->uris.pckt_expression, index, name_label, NULL, NULL},
+    {"olap-dial", ui->uris.pckt_overlap, index, name_label, NULL, NULL}
   };
 
   for (uint8_t i = 0; i < 4; ++i)
@@ -442,6 +454,8 @@ on_drum_loaded (IndiePocketUI *ui, const LV2_Atom_Object *obj)
       DrumProperty *prop = malloc (sizeof (DrumProperty));
       memcpy (prop, props + i, sizeof (DrumProperty));
       prop->dial = PCKT_GTK_DIAL (dial);
+      prop->next = ui->drum_props;
+      ui->drum_props = prop;
       g_object_set_data_full (G_OBJECT (dial),
                               DRUM_PROPERTY_KEY, prop,
                               (GDestroyNotify) free);
@@ -452,12 +466,59 @@ on_drum_loaded (IndiePocketUI *ui, const LV2_Atom_Object *obj)
                         G_CALLBACK (on_drum_prop_mouseover), ui);
       g_signal_connect (dial, "leave-notify-event",
                         G_CALLBACK (on_drum_prop_mouseout), ui);
+
+      /* Request property value from plugin.  */
+      WRITE_CONTROL_OBJECT (ui, patch_Get,
+        ipio_forge_key (&ui->forge, ui->uris.patch_subject);
+        lv2_atom_forge_int (&ui->forge, prop->drum);
+        ipio_forge_key (&ui->forge, ui->uris.patch_property);
+        lv2_atom_forge_urid (&ui->forge, prop->uri);
+      );
     }
 
   GtkWidget *root = GTK_WIDGET (gtk_builder_get_object (builder, "root"));
   gtk_container_add (GTK_CONTAINER (ui->drum_controls), root);
 
   g_object_unref (G_OBJECT (builder));
+}
+
+/* Find drum property by ID and URI.  */
+static DrumProperty *
+find_drum_prop (IndiePocketUI *ui, int8_t drum, LV2_URID uri)
+{
+  for (DrumProperty **item = &ui->drum_props; *item; item = &(*item)->next)
+    {
+      if (((*item)->drum == drum) && ((*item)->uri == uri))
+        return *item;
+    }
+  return NULL;
+}
+
+/* Drum property notification callback.  */
+static void
+on_drum_prop_value_set (IndiePocketUI *ui, const LV2_Atom_Object *obj)
+{
+  const LV2_Atom *id_atom = NULL, *prop_atom = NULL, *val_atom = NULL;
+  lv2_atom_object_get (obj,
+                       ui->uris.patch_subject, &id_atom,
+                       ui->uris.patch_property, &prop_atom,
+                       ui->uris.patch_value, &val_atom,
+                       0);
+
+  if (id_atom && (id_atom->type == ui->forge.Int)
+      && val_atom && (val_atom->type == ui->forge.Float))
+    {
+      int8_t id = *(const int *) LV2_ATOM_BODY_CONST (id_atom);
+      LV2_URID uri = ((const LV2_Atom_URID *) prop_atom)->body;
+      float value = *(const float *) LV2_ATOM_BODY_CONST (val_atom);
+      DrumProperty *drum_prop = find_drum_prop (ui, id, uri);
+      if (drum_prop)
+        gtk_range_set_value (GTK_RANGE (drum_prop->dial), (gdouble) value);
+      else
+        fprintf (stderr, "No property found for drum %d and uri %u\n", id, uri);
+    }
+  else
+    fprintf (stderr, "Invalid set property message\n");
 }
 
 /* Port event listener.  */
@@ -484,7 +545,21 @@ port_event (LV2UI_Handle handle, uint32_t port_index, uint32_t buffer_size,
 
   const LV2_Atom_Object *obj = (const LV2_Atom_Object *) atom;
   if (obj->body.otype == ui->uris.patch_Set)
-    on_kit_loaded (ui, obj);
+    {
+      const LV2_Atom *property = NULL;
+      lv2_atom_object_get (obj, ui->uris.patch_property, &property, 0);
+      if (!property && (property->type != ui->uris.atom_URID))
+        {
+          fprintf (stderr, "Got patch message with no property.\n");
+          return;
+        }
+
+      LV2_URID uri = ((const LV2_Atom_URID *) property)->body;
+      if (uri == ui->uris.pckt_Kit)
+        on_kit_loaded (ui, obj);
+      else
+        on_drum_prop_value_set (ui, obj);
+    }
   else if (obj->body.otype == ui->uris.pckt_DrumMeta)
     on_drum_loaded (ui, obj);
 }
