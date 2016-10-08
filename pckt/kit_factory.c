@@ -71,7 +71,7 @@ pckt_kit_factory_new (const char *filename, PcktStatus *status)
 
   /* `_basedir' is only kept as a reference because the pointer returned by
      `dirname' can not be safely passed to `free'.  */
-  factory->_basedir = strdup (filename);
+  factory->_basedir = strdup (factory->filename);
   factory->basedir = dirname (factory->_basedir);
 
   for (uint8_t i = 0; i < NUM_PARSERS; ++i)
