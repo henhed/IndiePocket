@@ -28,6 +28,7 @@
 #include <lv2/lv2plug.in/ns/ext/atom/atom.h>
 #include <lv2/lv2plug.in/ns/ext/atom/util.h>
 #include <lv2/lv2plug.in/ns/ext/worker/worker.h>
+#include <lv2/lv2plug.in/ns/ext/state/state.h>
 
 /* IndiePocket headers.  */
 #include "../pckt/kit_factory.h"
@@ -43,6 +44,7 @@ typedef struct {
   IPIOURIs uris;
   LV2_Log_Log *log;
   LV2_Log_Logger logger;
+  LV2_URID_Map *map;
   LV2_Atom_Forge forge;
   LV2_Atom_Forge_Frame notify_frame;
   LV2_Worker_Schedule *schedule;
@@ -51,7 +53,10 @@ typedef struct {
   void *ports[IPIO_NUM_PORTS];
   PcktKit *kit;
   char *kit_filename;
+  bool kit_changed;
+  bool kit_is_loading;
   PcktSoundPool *pool;
+  bool is_active;
 } IndiePocket;
 
 /* Internal message structs.  */
@@ -94,19 +99,17 @@ instantiate (const LV2_Descriptor *descriptor, double rate,
     return NULL;
   memset (plugin, 0, sizeof (IndiePocket));
 
-  LV2_URID_Map *map = NULL;
-  uint32_t i;
-  for (i = 0; features[i]; ++i)
+  for (uint32_t i = 0; features[i]; ++i)
     if (!strcmp (features[i]->URI, LV2_URID__map))
-      map = (LV2_URID_Map *) features[i]->data;
+      plugin->map = (LV2_URID_Map *) features[i]->data;
     else if (!strcmp (features[i]->URI, LV2_LOG__log))
       plugin->log = (LV2_Log_Log *) features[i]->data;
     else if (!strcmp (features[i]->URI, LV2_WORKER__schedule))
       plugin->schedule = (LV2_Worker_Schedule *) features[i]->data;
 
-  lv2_log_logger_init (&plugin->logger, map, plugin->log);
+  lv2_log_logger_init (&plugin->logger, plugin->map, plugin->log);
 
-  if (!map)
+  if (!plugin->map)
     {
       lv2_log_error (&plugin->logger, "Missing feature uri:map");
       free (plugin);
@@ -119,11 +122,15 @@ instantiate (const LV2_Descriptor *descriptor, double rate,
       return NULL;
     }
 
-  ipio_map_uris (&plugin->uris, map);
-  lv2_atom_forge_init (&plugin->forge, map);
+  ipio_map_uris (&plugin->uris, plugin->map);
+  lv2_atom_forge_init (&plugin->forge, plugin->map);
   plugin->samplerate = (uint32_t) rate;
   plugin->kit = NULL;
+  plugin->kit_filename = NULL;
+  plugin->kit_changed = false;
+  plugin->kit_is_loading = false;
   plugin->pool = pckt_soundpool_new (MAX_NUM_SOUNDS);
+  plugin->is_active = false;
 
   return (LV2_Handle) plugin;
 }
@@ -144,7 +151,7 @@ static void
 activate (LV2_Handle instance)
 {
   IndiePocket *plugin = (IndiePocket *) instance;
-  (void) plugin;
+  plugin->is_active = true;
 }
 
 /* Send drum meta to notification port.  */
@@ -167,6 +174,35 @@ write_drum_message (IndiePocket *plugin, int8_t index, PcktDrumMeta *drum)
   lv2_atom_forge_pop (&plugin->forge, &frame);
 }
 
+/* Send kit info to notification port.  */
+static void
+write_kit_message (IndiePocket *plugin, bool with_empty, bool with_drums)
+{
+  if (!plugin->kit || with_empty)
+    {
+      lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
+      ipio_forge_kit_file_atom (&plugin->forge, &plugin->uris, "");
+    }
+
+  if (plugin->kit)
+    {
+      if (with_drums)
+        {
+          PCKT_KIT_EACH_DRUM_META (plugin->kit, meta)
+            {
+              lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
+              write_drum_message (plugin,
+                                  pckt_kit_get_drum_meta_id (plugin->kit, meta),
+                                  meta);
+            }
+        }
+
+      lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
+      ipio_forge_kit_file_atom (&plugin->forge, &plugin->uris,
+                                plugin->kit_filename);
+    }
+}
+
 /* Handle incoming patch:Get event in audio thread.  */
 static void
 handle_patch_get (IndiePocket *plugin, uint32_t property,
@@ -176,19 +212,7 @@ handle_patch_get (IndiePocket *plugin, uint32_t property,
     return;
 
   if (property == plugin->uris.pckt_Kit)
-    {
-      PCKT_KIT_EACH_DRUM_META (plugin->kit, meta)
-        {
-          lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
-          write_drum_message (plugin,
-                              pckt_kit_get_drum_meta_id (plugin->kit, meta),
-                              meta);
-        }
-
-      lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
-      ipio_forge_kit_file_atom (&plugin->forge, &plugin->uris,
-                                plugin->kit_filename);
-    }
+    write_kit_message (plugin, true, true);
   else if (subject && (subject->type == plugin->forge.Int))
     {
       int8_t id = ((const LV2_Atom_Int *) subject)->body;
@@ -333,6 +357,18 @@ run (LV2_Handle instance, uint32_t nframes)
                              notify->atom.size);
   lv2_atom_forge_sequence_head (&plugin->forge, &plugin->notify_frame, 0);
 
+  if (plugin->kit_changed)
+    {
+      plugin->kit_changed = false;
+
+      /* Kill all current sounds since they hold references to samples that
+         might have been freed.  */
+      pckt_soundpool_clear (plugin->pool);
+
+      /* Tell UI there's a new kit.  */
+      write_kit_message (plugin, true, plugin->kit_is_loading ? false : true);
+    }
+
   /* Read incoming events.  */
   const LV2_Atom_Sequence *events =
     (const LV2_Atom_Sequence *) plugin->ports[IPIO_CONTROL];
@@ -378,7 +414,7 @@ static void
 deactivate (LV2_Handle instance)
 {
   IndiePocket *plugin = (IndiePocket *) instance;
-  (void) plugin;
+  plugin->is_active = false;
 }
 
 /* Free any resources allocated in `instantiate'.  */
@@ -452,7 +488,10 @@ work (LV2_Handle instance, LV2_Worker_Respond_Function respond,
       lv2_log_note (&plugin->logger, "Loading %s\n", filename);
       kit = pckt_kit_new ();
       err = pckt_kit_factory_load_metas (factory, kit);
-      if (err != PCKTE_SUCCESS)
+      if (err == PCKTE_SUCCESS)
+        /* Use file name from factory to resolve symlinks.  */
+        filename = pckt_kit_factory_get_filename (factory);
+      else
         {
           pckt_kit_factory_free (factory);
           pckt_kit_free (kit);
@@ -542,45 +581,22 @@ work_response (LV2_Handle instance, uint32_t size, const void *data)
   const IPcktKitMsg *kitmsg_new = (const IPcktKitMsg *) atom;
   if (!kitmsg_new->kit)
     {
-      if (plugin->kit)
-        {
-          /* Remind UI about old kit.  */
-          PCKT_KIT_EACH_DRUM_META (plugin->kit, meta)
-            {
-              lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
-              write_drum_message (plugin,
-                                  pckt_kit_get_drum_meta_id (plugin->kit, meta),
-                                  meta);
-            }
-
-          lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
-          ipio_forge_kit_file_atom (&plugin->forge, &plugin->uris,
-                                    plugin->kit_filename);
-        }
-      else
-        {
-          /* Send empty message if no kit is loaded.  */
-          lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
-          ipio_forge_kit_file_atom (&plugin->forge, &plugin->uris, "");
-        }
-
+      /* Remind UI about old kit.  */
+      write_kit_message (plugin, true, true);
       return LV2_WORKER_SUCCESS;
     }
 
   if (kitmsg_new->kit == plugin->kit)
     {
+      plugin->kit_is_loading = false;
+
       /* Notify UI that the new kit has finished loading.  */
-      lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
-      ipio_forge_kit_file_atom (&plugin->forge, &plugin->uris,
-                                plugin->kit_filename);
+      write_kit_message (plugin, false, false);
     }
   else
     {
       if (plugin->kit)
         {
-          /* Kill all current sounds since they hold references to samples that
-             will be freed by the kit.  */
-          pckt_soundpool_clear (plugin->pool);
           /* Tell worker to free the old kit.  */
           IPcktKitMsg kitmsg_free = {
             {sizeof (PcktKit *) + sizeof (char *), plugin->uris.pckt_freeKit},
@@ -594,16 +610,152 @@ work_response (LV2_Handle instance, uint32_t size, const void *data)
       /* Start using new kit.  */
       plugin->kit = kitmsg_new->kit;
       plugin->kit_filename = kitmsg_new->kit_filename;
+      plugin->kit_changed = true;
+      plugin->kit_is_loading = true;
     }
 
   return LV2_WORKER_SUCCESS;
 }
 
+/* Save current state.  */
+static LV2_State_Status
+state_save (LV2_Handle instance, LV2_State_Store_Function store,
+            LV2_State_Handle handle, uint32_t flags,
+            const LV2_Feature * const *features)
+{
+  (void) flags;
+
+  IndiePocket *plugin = (IndiePocket *) instance;
+  LV2_State_Map_Path *map_path;
+  char *path;
+
+  if (!plugin->kit_filename)
+    return LV2_STATE_SUCCESS;
+
+  for (uint32_t i = 0; features[i]; ++i)
+    {
+      if (!strcmp (features[i]->URI, LV2_STATE__mapPath))
+        map_path = (LV2_State_Map_Path *) features[i]->data;
+    }
+
+  if (!map_path)
+    return LV2_STATE_ERR_NO_FEATURE;
+
+  path = map_path->abstract_path (map_path->handle, plugin->kit_filename);
+  store (handle, plugin->uris.pckt_Kit, path, strlen (path) + 1,
+         plugin->uris.atom_Path, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+  free (path);
+
+  return LV2_STATE_SUCCESS;
+}
+
+/* Restore saved state.  */
+static LV2_State_Status
+state_restore (LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
+               LV2_State_Handle handle, uint32_t flags,
+               const LV2_Feature * const *features)
+{
+  (void) flags;
+
+  IndiePocket *plugin = (IndiePocket *) instance;
+  LV2_Worker_Schedule *schedule = NULL;
+  LV2_State_Map_Path *map_path = NULL;
+
+  size_t kit_value_size;
+  uint32_t kit_value_type;
+  uint32_t kit_value_flags;
+  const void *kit_value;
+  const char *kit_path;
+
+  for (uint32_t i = 0; features[i]; ++i)
+    {
+      if (!strcmp (features[i]->URI, LV2_WORKER__schedule))
+        schedule = (LV2_Worker_Schedule *) features[i]->data;
+      else if (!strcmp (features[i]->URI, LV2_STATE__mapPath))
+        map_path = (LV2_State_Map_Path *) features[i]->data;
+    }
+
+  if (!map_path)
+    return LV2_STATE_ERR_NO_FEATURE;
+
+  kit_value = retrieve (handle, plugin->uris.pckt_Kit, &kit_value_size,
+                        &kit_value_type, &kit_value_flags);
+  if (!kit_value || (kit_value_type != plugin->uris.atom_Path))
+    {
+      lv2_log_note (&plugin->logger, "Missing or invalid pckt:Kit\n");
+      return LV2_STATE_ERR_NO_PROPERTY;
+    }
+
+  kit_path = map_path->absolute_path (map_path->handle,
+                                      (const char *) kit_value);
+
+  if (!plugin->is_active || !schedule)
+    {
+      lv2_log_trace (&plugin->logger, "Loading %s\n", kit_path);
+
+      PcktKit *kit = NULL;
+      PcktKit *old_kit = plugin->kit;
+      char *old_kit_filename = plugin->kit_filename;
+      PcktStatus err = PCKTE_SUCCESS;
+      PcktKitFactory *factory = pckt_kit_factory_new (kit_path, &err);
+
+      if (!factory)
+        {
+          lv2_log_error (&plugin->logger, "Failed to parse %s (%s)\n",
+                         kit_path, pckt_strerror (err));
+          return LV2_STATE_ERR_UNKNOWN;
+        }
+
+      kit = pckt_kit_factory_load (factory);
+      kit_path = pckt_kit_factory_get_filename (factory);
+
+      if (!kit)
+        {
+          lv2_log_error (&plugin->logger, "Failed to load %s\n", kit_path);
+          return LV2_STATE_ERR_UNKNOWN;
+        }
+
+      plugin->kit = kit;
+      plugin->kit_changed = true;
+      plugin->kit_filename = malloc (strlen (kit_path) + 1);
+      strcpy (plugin->kit_filename, kit_path);
+
+      if (old_kit)
+        pckt_kit_free (old_kit);
+      if (old_kit_filename)
+        free (old_kit_filename);
+    }
+  else
+    {
+      lv2_log_trace (&plugin->logger, "Scheduling %s\n", kit_path);
+
+      LV2_Atom_Forge forge;
+      LV2_Atom *buffer = (LV2_Atom *) calloc (1, strlen (kit_path) + 128);
+      lv2_atom_forge_init (&forge, plugin->map);
+      lv2_atom_forge_set_sink (&forge, ipio_atom_sink, ipio_atom_sink_deref,
+                               buffer);
+
+      ipio_forge_kit_file_atom (&forge, &plugin->uris, kit_path);
+      schedule->schedule_work (plugin->schedule->handle,
+                               lv2_atom_pad_size (buffer->size),
+                               buffer + 1);
+      free (buffer);
+    }
+
+  return LV2_STATE_SUCCESS;
+}
+
 /* IndiePocket worker descriptor.  */
-static const LV2_Worker_Interface worker = {
+static const LV2_Worker_Interface worker_iface = {
   work,
   work_response,
   NULL /* `end_run' N/A.  */
+};
+
+/* IndiePocket state descriptor.  */
+static const LV2_State_Interface state_iface = {
+  state_save,
+  state_restore
 };
 
 /* Return any extension data supported by this plugin.  */
@@ -611,7 +763,9 @@ static const void *
 extension_data (const char *uri)
 {
   if (!strcmp (uri, LV2_WORKER__interface))
-    return &worker;
+    return &worker_iface;
+  else if (!strcmp (uri, LV2_STATE__interface))
+    return &state_iface;
 
   return NULL;
 }

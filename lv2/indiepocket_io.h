@@ -218,4 +218,21 @@ ipio_write_drum_property (LV2_Atom_Forge *forge, const IPIOURIs *uris,
   return msg;
 }
 
+static inline LV2_Atom_Forge_Ref
+ipio_atom_sink (LV2_Atom_Forge_Sink_Handle handle, const void *buffer,
+                uint32_t size)
+{
+  LV2_Atom *atom = (LV2_Atom *) handle;
+  const uint32_t offset = lv2_atom_total_size (atom);
+  memcpy ((char *) atom + offset, buffer, size);
+  atom->size += size;
+  return offset;
+}
+
+static inline LV2_Atom *
+ipio_atom_sink_deref (LV2_Atom_Forge_Sink_Handle handle, LV2_Atom_Forge_Ref ref)
+{
+  return (LV2_Atom *) ((char *) handle + ref);
+}
+
 #endif /* ! INDIEPOCKET_IO_H */

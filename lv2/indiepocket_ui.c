@@ -384,7 +384,10 @@ on_kit_loaded (IndiePocketUI *ui, const LV2_Atom_Object *obj)
       g_object_unref (kit_file);
     }
   else
-    gtk_file_chooser_unselect_all (GTK_FILE_CHOOSER (ui->button));
+    {
+      clear_drum_controls (ui);
+      gtk_file_chooser_unselect_all (GTK_FILE_CHOOSER (ui->button));
+    }
 
   gtk_widget_set_sensitive (ui->button, TRUE);
 }

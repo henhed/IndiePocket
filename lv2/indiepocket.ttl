@@ -7,8 +7,9 @@
 @prefix ui:    <http://lv2plug.in/ns/extensions/ui#> .
 @prefix pg:    <http://lv2plug.in/ns/ext/port-groups#> .
 @prefix work:  <http://lv2plug.in/ns/ext/worker#> .
+@prefix state: <http://lv2plug.in/ns/ext/state#> .
 @prefix patch: <http://lv2plug.in/ns/ext/patch#> .
-@prefix rsz: <http://lv2plug.in/ns/ext/resize-port#> .
+@prefix rsz:   <http://lv2plug.in/ns/ext/resize-port#> .
 @prefix pckt:  <http://www.henhed.se/lv2/indiepocket#> .
 
 <http://www.henhed.se/about#me>
@@ -30,8 +31,10 @@ pckt:OutputGroup
     doap:license <http://www.gnu.org/licenses/gpl.html> ;
     lv2:requiredFeature urid:map ,
         work:schedule ;
-    lv2:optionalFeature lv2:hardRTCapable ;
-    lv2:extensionData work:interface ;
+    lv2:optionalFeature lv2:hardRTCapable ,
+        state:threadSafeRestore ;
+    lv2:extensionData work:interface ,
+        state:interface ;
     ui:ui <http://www.henhed.se/lv2/indiepocket#ui> ;
     lv2:port [
         a lv2:AudioPort ,
