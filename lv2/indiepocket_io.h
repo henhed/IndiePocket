@@ -218,6 +218,22 @@ ipio_write_drum_property (LV2_Atom_Forge *forge, const IPIOURIs *uris,
   return msg;
 }
 
+static inline size_t
+ipio_estimate_drum_property_message_size ()
+{
+  /* This estimate is implementation dependent and the accuracy may vary
+     across different versions of LV2.  Use with caution.  */
+  return lv2_atom_pad_size (sizeof (LV2_Atom_Object))
+    /* 3 object keys (3 * (key + context)).  */
+    + lv2_atom_pad_size (6 * sizeof (uint32_t))
+    /* Subject size.  */
+    + lv2_atom_pad_size (sizeof (LV2_Atom) + sizeof (int32_t))
+    /* Property size.  */
+    + lv2_atom_pad_size (sizeof (LV2_Atom) + sizeof (LV2_URID))
+    /* Value size.  */
+    + lv2_atom_pad_size (sizeof (LV2_Atom) + sizeof (float));
+}
+
 static inline LV2_Atom_Forge_Ref
 ipio_atom_sink (LV2_Atom_Forge_Sink_Handle handle, const void *buffer,
                 uint32_t size)

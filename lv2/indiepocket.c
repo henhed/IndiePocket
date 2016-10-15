@@ -689,10 +689,44 @@ state_save (LV2_Handle instance, LV2_State_Store_Function store,
   if (!map_path)
     return LV2_STATE_ERR_NO_FEATURE;
 
+  /* Store kit file name.  */
   path = map_path->abstract_path (map_path->handle, plugin->kit_filename);
   store (handle, plugin->uris.pckt_Kit, path, strlen (path) + 1,
          plugin->uris.atom_Path, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
   free (path);
+
+  /* Store drum meta property values.  */
+  LV2_Atom_Forge forge;
+  LV2_Atom *buffer;
+  size_t buffer_size = sizeof (LV2_Atom);
+  size_t message_size = ipio_estimate_drum_property_message_size ();
+
+  /* Estimate total buffer size.  */
+  PCKT_KIT_EACH_DRUM_META (plugin->kit, meta)
+    buffer_size += (NUM_DRUM_META_PROPS * message_size);
+
+  /* Allocate 2x BUFFER_SIZE in case estimate is inaccurate.  */
+  buffer = (LV2_Atom *) calloc (2, buffer_size);
+  lv2_atom_forge_init (&forge, plugin->map);
+  lv2_atom_forge_set_sink (&forge, ipio_atom_sink, ipio_atom_sink_deref,
+                           buffer);
+
+  PCKT_KIT_EACH_DRUM_META (plugin->kit, meta)
+    {
+      int8_t id = pckt_kit_get_drum_meta_id (plugin->kit, meta);
+      for (uint8_t i = 0; i < NUM_DRUM_META_PROPS; ++i)
+        {
+          IDrumMetaProp *prop = &plugin->drum_meta_props[i];
+          ipio_write_drum_property (&forge, &plugin->uris, id,
+                                    prop->urid, prop->get (meta));
+        }
+    }
+
+  store (handle, plugin->uris.pckt_DrumMeta,
+         buffer + 1, lv2_atom_pad_size (buffer->size),
+         forge.Tuple, LV2_STATE_IS_POD);
+
+  free (buffer);
 
   return LV2_STATE_SUCCESS;
 }
