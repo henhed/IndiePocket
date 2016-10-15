@@ -45,6 +45,7 @@ typedef struct {
   uint32_t urid;
   float (*get) (const PcktDrumMeta *);
   bool (*set) (PcktDrumMeta *, float);
+  float values[INT8_MAX + 1];
 } IDrumMetaProp;
 
 /* Plugin struct.  */
@@ -537,8 +538,25 @@ work (LV2_Handle instance, LV2_Worker_Respond_Function respond,
       kit = pckt_kit_new ();
       err = pckt_kit_factory_load_metas (factory, kit);
       if (err == PCKTE_SUCCESS)
-        /* Use file name from factory to resolve symlinks.  */
-        filename = pckt_kit_factory_get_filename (factory);
+        {
+          /* Use file name from factory to resolve symlinks.  */
+          filename = pckt_kit_factory_get_filename (factory);
+
+          /* Set initial drum meta property values.  */
+          PCKT_KIT_EACH_DRUM_META (kit, meta)
+            {
+              int8_t id = pckt_kit_get_drum_meta_id (kit, meta);
+              if (id < 0)
+                continue;
+
+              for (uint8_t i = 0; i < NUM_DRUM_META_PROPS; ++i)
+                {
+                  IDrumMetaProp *prop = &plugin->drum_meta_props[i];
+                  prop->set (meta, prop->values[id]);
+                  prop->values[id] = 0;
+                }
+            }
+        }
       else
         {
           pckt_kit_factory_free (factory);
@@ -743,11 +761,12 @@ state_restore (LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
   LV2_Worker_Schedule *schedule = NULL;
   LV2_State_Map_Path *map_path = NULL;
 
-  size_t kit_value_size;
-  uint32_t kit_value_type;
-  uint32_t kit_value_flags;
+  size_t value_size;
+  uint32_t value_type;
+  uint32_t value_flags;
   const void *kit_value;
   const char *kit_path;
+  const LV2_Atom_Tuple *drum_props;
 
   for (uint32_t i = 0; features[i]; ++i)
     {
@@ -760,9 +779,10 @@ state_restore (LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
   if (!map_path)
     return LV2_STATE_ERR_NO_FEATURE;
 
-  kit_value = retrieve (handle, plugin->uris.pckt_Kit, &kit_value_size,
-                        &kit_value_type, &kit_value_flags);
-  if (!kit_value || (kit_value_type != plugin->uris.atom_Path))
+  /* Retrieve kit file name.  */
+  kit_value = retrieve (handle, plugin->uris.pckt_Kit, &value_size,
+                        &value_type, &value_flags);
+  if (!kit_value || (value_type != plugin->uris.atom_Path))
     {
       lv2_log_note (&plugin->logger, "Missing or invalid pckt:Kit\n");
       return LV2_STATE_ERR_NO_PROPERTY;
@@ -771,6 +791,14 @@ state_restore (LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
   kit_path = map_path->absolute_path (map_path->handle,
                                       (const char *) kit_value);
 
+  /* Retrieve drum meta property values.  */
+  drum_props = (const LV2_Atom_Tuple *) retrieve (handle,
+                                                  plugin->uris.pckt_DrumMeta,
+                                                  &value_size,
+                                                  &value_type,
+                                                  &value_flags);
+
+  /* Restore state.  */
   if (!plugin->is_active || !schedule)
     {
       lv2_log_trace (&plugin->logger, "Loading %s\n", kit_path);
@@ -799,6 +827,7 @@ state_restore (LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 
       plugin->kit = kit;
       plugin->kit_changed = true;
+      plugin->kit_is_loading = false;
       plugin->kit_filename = malloc (strlen (kit_path) + 1);
       strcpy (plugin->kit_filename, kit_path);
 
@@ -806,13 +835,67 @@ state_restore (LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
         pckt_kit_free (old_kit);
       if (old_kit_filename)
         free (old_kit_filename);
+
+      if (drum_props && (value_type == plugin->forge.Tuple))
+        {
+          LV2_ATOM_TUPLE_BODY_FOREACH (drum_props, value_size, atom)
+            {
+              const LV2_Atom *subject = NULL, *property = NULL, *value = NULL;
+
+              if (!ipio_atom_type_is_object (&plugin->forge, atom->type))
+                continue;
+
+              lv2_atom_object_get ((const LV2_Atom_Object *) atom,
+                                   plugin->uris.patch_subject, &subject,
+                                   plugin->uris.patch_property, &property,
+                                   plugin->uris.patch_value, &value,
+                                   0);
+
+              if (property)
+                handle_patch_set (plugin,
+                                  ((const LV2_Atom_URID *) property)->body,
+                                  subject, value, NULL);
+            }
+        }
     }
   else
     {
       lv2_log_trace (&plugin->logger, "Scheduling %s\n", kit_path);
 
       LV2_Atom_Forge forge;
-      LV2_Atom *buffer = (LV2_Atom *) calloc (1, strlen (kit_path) + 128);
+      LV2_Atom *buffer;
+
+      if (drum_props && (value_type == plugin->forge.Tuple))
+        {
+          LV2_ATOM_TUPLE_BODY_FOREACH (drum_props, value_size, atom)
+            {
+              const LV2_Atom *subject = NULL, *property = NULL, *value = NULL;
+
+              if (!ipio_atom_type_is_object (&plugin->forge, atom->type))
+                continue;
+
+              lv2_atom_object_get ((const LV2_Atom_Object *) atom,
+                                   plugin->uris.patch_subject, &subject,
+                                   plugin->uris.patch_property, &property,
+                                   plugin->uris.patch_value, &value,
+                                   0);
+
+              if (subject && property && value
+                  && (subject->type == plugin->forge.Int)
+                  && (property->type == plugin->uris.atom_URID)
+                  && (value->type == plugin->forge.Float))
+                {
+                  int8_t id = ((const LV2_Atom_Int *) subject)->body;
+                  uint32_t urid = ((const LV2_Atom_URID *) property)->body;
+                  IDrumMetaProp *prop = get_drum_meta_property (plugin, urid);
+                  if (prop && (id >= 0))
+                    prop->values[id] = ((const LV2_Atom_Float *) value)->body;
+                }
+            }
+        }
+
+
+      buffer = (LV2_Atom *) calloc (1, strlen (kit_path) + 128);
       lv2_atom_forge_init (&forge, plugin->map);
       lv2_atom_forge_set_sink (&forge, ipio_atom_sink, ipio_atom_sink_deref,
                                buffer);
