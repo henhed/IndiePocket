@@ -38,6 +38,14 @@
 #include "indiepocket_io.h"
 
 #define MAX_NUM_SOUNDS 32
+#define NUM_DRUM_META_PROPS 4
+
+/* Meta drum property struct.  */
+typedef struct {
+  uint32_t urid;
+  float (*get) (const PcktDrumMeta *);
+  bool (*set) (PcktDrumMeta *, float);
+} IDrumMetaProp;
 
 /* Plugin struct.  */
 typedef struct {
@@ -57,6 +65,7 @@ typedef struct {
   bool kit_is_loading;
   PcktSoundPool *pool;
   bool is_active;
+  IDrumMetaProp drum_meta_props[NUM_DRUM_META_PROPS];
 } IndiePocket;
 
 /* Internal message structs.  */
@@ -132,7 +141,36 @@ instantiate (const LV2_Descriptor *descriptor, double rate,
   plugin->pool = pckt_soundpool_new (MAX_NUM_SOUNDS);
   plugin->is_active = false;
 
+  plugin->drum_meta_props[0].urid = plugin->uris.pckt_tuning;
+  plugin->drum_meta_props[0].get = pckt_drum_meta_get_tuning;
+  plugin->drum_meta_props[0].set = pckt_drum_meta_set_tuning;
+
+  plugin->drum_meta_props[1].urid = plugin->uris.pckt_dampening;
+  plugin->drum_meta_props[1].get = pckt_drum_meta_get_dampening;
+  plugin->drum_meta_props[1].set = pckt_drum_meta_set_dampening;
+
+  plugin->drum_meta_props[2].urid = plugin->uris.pckt_expression;
+  plugin->drum_meta_props[2].get = pckt_drum_meta_get_expression;
+  plugin->drum_meta_props[2].set = pckt_drum_meta_set_expression;
+
+  plugin->drum_meta_props[3].urid = plugin->uris.pckt_overlap;
+  plugin->drum_meta_props[3].get = pckt_drum_meta_get_sample_overlap;
+  plugin->drum_meta_props[3].set = pckt_drum_meta_set_sample_overlap;
+
   return (LV2_Handle) plugin;
+}
+
+/* Get drum meta property by URID.  */
+static IDrumMetaProp *
+get_drum_meta_property (IndiePocket *plugin, uint32_t urid)
+{
+  for (uint8_t i = 0; i < NUM_DRUM_META_PROPS; ++i)
+    {
+      if (plugin->drum_meta_props[i].urid == urid)
+        return &plugin->drum_meta_props[i];
+    }
+
+  return NULL;
 }
 
 /* Connect host ports to the plugin instance. Port buffers may only be
@@ -205,73 +243,83 @@ write_kit_message (IndiePocket *plugin, bool with_empty, bool with_drums)
 
 /* Handle incoming patch:Get event in audio thread.  */
 static void
-handle_patch_get (IndiePocket *plugin, uint32_t property,
+handle_patch_get (IndiePocket *plugin, uint32_t urid,
                   const LV2_Atom *subject)
 {
   if (!plugin->kit)
     return;
 
-  if (property == plugin->uris.pckt_Kit)
-    write_kit_message (plugin, true, true);
-  else if (subject && (subject->type == plugin->forge.Int))
+  if (urid == plugin->uris.pckt_Kit)
+    {
+      write_kit_message (plugin, true, true);
+      return;
+    }
+
+  IDrumMetaProp *prop = get_drum_meta_property (plugin, urid);
+
+  if (!prop)
+    {
+      lv2_log_error (&plugin->logger,
+                     "Unknown patch:Get property %u\n", urid);
+      return;
+    }
+
+  if (subject && (subject->type == plugin->forge.Int))
     {
       int8_t id = ((const LV2_Atom_Int *) subject)->body;
       PcktDrumMeta *meta = pckt_kit_get_drum_meta (plugin->kit, id);
+
       if (meta)
         {
-          float value = 0;
-          if (property == plugin->uris.pckt_tuning)
-            value = pckt_drum_meta_get_tuning (meta);
-          else if (property == plugin->uris.pckt_dampening)
-            value = pckt_drum_meta_get_dampening (meta);
-          else if (property == plugin->uris.pckt_expression)
-            value = pckt_drum_meta_get_expression (meta);
-          else if (property == plugin->uris.pckt_overlap)
-            value = pckt_drum_meta_get_sample_overlap (meta);
-
           lv2_atom_forge_frame_time (&plugin->forge, plugin->frame_offset);
           ipio_write_drum_property (&plugin->forge, &plugin->uris, id,
-                                    property, value);
+                                    urid, prop->get (meta));
         }
       else
         lv2_log_error (&plugin->logger, "Unknown drum #%d\n", id);
     }
   else
-    lv2_log_error (&plugin->logger,
-                   "Unknown patch:Get property %u\n", property);
+    lv2_log_error (&plugin->logger, "Got patch:Get without a subject\n");
 }
 
 /* Handle incoming patch:Set event in audio thread.  */
 static void
-handle_patch_set (IndiePocket *plugin, uint32_t property,
+handle_patch_set (IndiePocket *plugin, uint32_t urid,
                   const LV2_Atom *subject, const LV2_Atom *value,
                   const LV2_Atom *data)
 {
-  if (property == plugin->uris.pckt_Kit)
-    plugin->schedule->schedule_work (plugin->schedule->handle,
-                                     lv2_atom_total_size (data),
-                                     data);
-  else if (subject && (subject->type == plugin->forge.Int)
-           && value && (value->type == plugin->forge.Float))
+  if (urid == plugin->uris.pckt_Kit)
+    {
+      plugin->schedule->schedule_work (plugin->schedule->handle,
+                                       lv2_atom_total_size (data),
+                                       data);
+      return;
+    }
+
+  IDrumMetaProp *prop = get_drum_meta_property (plugin, urid);
+
+  if (!prop)
+    {
+      lv2_log_error (&plugin->logger,
+                     "Unknown patch:Set property %u\n", urid);
+      return;
+    }
+
+  if (subject && (subject->type == plugin->forge.Int)
+      && value && (value->type == plugin->forge.Float))
     {
       int8_t id = ((const LV2_Atom_Int *) subject)->body;
       float val = ((const LV2_Atom_Float *) value)->body;
       PcktDrumMeta *meta = pckt_kit_get_drum_meta (plugin->kit, id);
+
       if (meta)
-        {
-          if (property == plugin->uris.pckt_tuning)
-            pckt_drum_meta_set_tuning (meta, val);
-          else if (property == plugin->uris.pckt_dampening)
-            pckt_drum_meta_set_dampening (meta, val);
-          else if (property == plugin->uris.pckt_expression)
-            pckt_drum_meta_set_expression (meta, val);
-          else if (property == plugin->uris.pckt_overlap)
-            pckt_drum_meta_set_sample_overlap (meta, val);
-        }
+        prop->set (meta, val);
+      else
+        lv2_log_error (&plugin->logger, "Unknown drum #%d\n", id);
     }
   else
     lv2_log_error (&plugin->logger,
-                   "Unknown patch:Set property %u\n", property);
+                   "Got patch:Set without a subject or value\n");
 }
 
 /* Handle incoming non-midi events in the audio thread.  */
