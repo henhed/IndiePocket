@@ -236,9 +236,10 @@ pckt_drum_hit (const PcktDrum *drum, PcktSound *sound, float force)
     {
       /* Raise FORCE to the power of EXP, where INF > EXP > 1 for negative
          expression values and 1 > EXP > 0 for positive expression values.
-         The .8 factor of the exponent is arbitrarily chosen as more extreme
-         values doesn't sound useful.  */
-      float exp = 1.f - fabs (drum->meta->expression * 0.8);
+         CAP is the largest representable value less than 1 and is used to make
+         sure the range of EXP is exclusive.  */
+      float cap = nexttowardf (1, -INFINITY);
+      float exp = 1.f - fminf (cap, fabs (drum->meta->expression));
       if (drum->meta->expression < 0)
         exp = 1.f / exp;
 
